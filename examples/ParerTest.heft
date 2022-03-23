@@ -1,0 +1,11 @@
+let x = match A x y with {
+  | A b c -> b -- This is a comment
+  | B c d -> c
+} in
+let y = \v -> \w -> handle {
+  throw {} p k = { Nothing
+  }
+  ,
+  return x p = { Just x }
+} v w in
+x! y!

@@ -1,0 +1,86 @@
+f,f',...    ∈ OpSymbol
+x,k,m,p,... ∈ Vars
+
+
+e ::= v
+    | e e
+    | e!
+    | handle case* e e
+    | op f e*                    -- Algebraic effect
+    | ho f e* e*                 -- Higher-order effect
+
+
+v ::= lam x e
+    | {e}
+    | c
+    | x
+
+
+case ::= return x = e
+       | op f x* p k = e
+       | ho f x* m* p = e
+
+
+E ::= E e | v E | E!
+    | handle cases E e | handle cases v E
+    | op f (E...e) | ... | op f (v...E)
+    | ho f (E...e) es | ... | ho f (v...E) es | ho f vs (E...e) | ho f vs (v...E)
+
+
+e |-> e'
+------------------
+E[ e ] --> E[ e' ]
+
+
+{e}! |-> e 
+
+
+(lam x e) v |-> e[x/v]
+
+
+(return x p = e) ∈ cases
+--------------------------------------
+handle cases vp v |-> e[ x/v, p/vp ]
+
+
+there are no closer handlers that match f in E
+y, q are fresh
+(op f xs p k = e) ∈ cases
+-----------------------------------------------------------
+handle cases vp E[ op f vs ]
+  |-> e[ xs/vs , p/vp , k/(λ y q . handle cases q E[y]) ]
+
+
+there are no closer handlers that match f in E
+(ho f xs ms p = e) ∈ cases
+-------------------------------------------------------
+handle cases vp E[ ho f vs vsm ]
+  |-> handle cases vp E[ e[ xs/vs , p/vp , ms/vsm ] ]
+
+
+
+
+ALTERNATIVE
+
+there are no closer handlers that match f in E
+y, q are fresh
+(op f xs ms p k = e) ∈ cases
+-----------------------------------------------------------
+handle cases vp E[ op f vs vsm ]
+  |-> e[ xs/vs , ms/vsm , p/vp , k/(λ y q . handle cases q E[y!]) ]
+
+
+
+{-
+
+handler hExc : {[Exc|e] a <h>} -> {[e] Maybe a <Exc|h>}
+  op catch p h k = k { match hExc p with Nothing -> h! 
+                                       | Just x -> x   }
+| op throw k = Nothing
+
+-----
+
+k : {[Exc|e+h] a} -> [e] b
+
+-}
+
