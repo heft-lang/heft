@@ -3,23 +3,27 @@ name:               heft
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
--- synopsis:
+synopsis: Programming with Higher order EFfecTs!
 
 -- A longer description of the package.
 -- description:
 
--- A URL where users can report bugs.
--- bug-reports:
+homepage:    https://github.com/heft-lang/heft#readme
+bug-reports: https://github.com/heft-lang/heft/issues
 
 -- The license under which the package is released.
--- license:
+license:            BSD-3-Clause
+license-file:       LICENSE
 author:             Jaro Reinders
 maintainer:         jaro.reinders@gmail.com
 
--- A copyright notice.
--- copyright:
--- category:
-extra-source-files: CHANGELOG.md
+copyright:          2022 Heft-lang Team
+category:           Language, Effect
+tested-with:        
+    GHC == 8.10.7
+extra-source-files: 
+    CHANGELOG.md
+    README.md
 
 library
     exposed-modules:  Heft.AST, Heft.Interpreter, Heft.Parser
@@ -30,12 +34,6 @@ library
 
 executable heft
     main-is:          Main.hs
-
-    -- Modules included in this executable, other than Main.
-    -- other-modules:
-
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
     build-depends:    base ^>=4.14.3.0, heft, uu-parsinglib, ListLike
     hs-source-dirs:   app
     default-language: Haskell2010
