@@ -7,12 +7,16 @@ import System.Environment
 main :: IO ()
 main = do
   x : _ <- getArgs
+  runFile x
+
+runFile :: String -> IO ()
+runFile x = do
   xs <- readFile x
   let expr = runParser x pExpr xs
   putStrLn "Parsed Expression:"
   print expr
   putStrLn "Result Value:"
-  print (drive expr)
+  print (eval expr)
 
 {-
 
