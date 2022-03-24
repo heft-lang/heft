@@ -11,20 +11,20 @@ E ::= E e | v E | E!
 
 -}
 
-data Ctx = CtxMt
-         | CtxApp0 Ctx Expr
-         | CtxApp1 Val Ctx
-         | CtxRun Ctx
-         | CtxCon String [Val] Ctx [Expr]
-         | CtxMatch Ctx [(Pat,Expr)]
-         | CtxHandle0 [(CPat, Expr)] Ctx Expr
-         | CtxHandle1 [(CPat, Expr)] Val Ctx
-         | CtxOp0 Name [Val] Ctx [Expr] [Expr]
-         | CtxOp1 Name [Val] [Val] Ctx [Expr]
-         | CtxBOp0 Ctx BinOp Expr
-         | CtxBOp1 Val BinOp Ctx
+data Ctx
+  = CtxMt
+  | CtxApp0 Ctx Expr
+  | CtxApp1 Val Ctx
+  | CtxRun Ctx
+  | CtxCon String [Val] Ctx [Expr]
+  | CtxMatch Ctx [(Pat,Expr)]
+  | CtxHandle0 [(CPat, Expr)] Ctx Expr
+  | CtxHandle1 [(CPat, Expr)] Val Ctx
+  | CtxOp0 Name [Val] Ctx [Expr] [Expr]
+  | CtxOp1 Name [Val] [Val] Ctx [Expr]
+  | CtxBOp0 Ctx BinOp Expr
+  | CtxBOp1 Val BinOp Ctx
   deriving Show
-
 
 {- Semantics (selected rules):
 
@@ -49,7 +49,7 @@ handle cases with vp in v |-> e[ x/v, p/vp ]
 
 there are no closer handlers that match f in E
 (op f xs ms p k = e) ∈ cases
------------------------------------------------------------------
+----------------------------------------------------------------------------
 handle cases with vp in E[ op f vsv vsm ]
   |-> e[ xs/vsv , ms/vsm , p/vp , k/(λ y q . handle cases with q in E[y!]) ]
 
@@ -57,71 +57,75 @@ handle cases with vp in E[ op f vsv vsm ]
 
 {- Notion of potential redex -}
 
-data PR = PRNum Int
-        | PRLam String Expr
-        | PRApp String Expr Val
-        | PRSusp Expr
-        | PRRun Expr
-        | PRCon String [Val]
-        | PRMatch Name [Val] [(Pat, Expr)]
-        | PRRet [(CPat,Expr)] Val Val
-        | PROp Name [Val] [Val] [(CPat,Expr)] Val Ctx
-        | PRLetrec String Expr Expr
-        | PRBOp Val BinOp Val
+data PR
+  = PRNum Int
+  | PRLam String Expr
+  | PRApp String Expr Val
+  | PRSusp Expr
+  | PRRun Expr
+  | PRCon String [Val]
+  | PRMatch Name [Val] [(Pat, Expr)]
+  | PRRet [(CPat,Expr)] Val Val
+  | PROp Name [Val] [Val]
+  | PRLetrec String Expr Expr
+  | PRBOp Val BinOp Val
+
 
 {- Notion of decomposition -}
 
 data Decomp = VD Val                  -- value decomposition
             | RD Ctx PR               -- redex decomposition
-            | OD Ctx Name [Val] [Val] -- op decomposition
 
 {- Decomposition, Composition, Recomposition -}
 
 decompose :: Expr -> Ctx -> Decomp
-decompose (V v)                      CtxMt = VD v
-decompose (V v)                      c@CtxRun{} 
-  = error $ "Cannot decompose value: " ++ show v ++ "\nin: " ++ show c ++ "\nperhaps you forgot to thunk a value?"
-decompose (Num i)                     c     = RD c (PRNum i)
-decompose (Lam x e)                   c     = RD c (PRLam x e)
-decompose (Var x)                     c     = error $ "Error: free variable " ++ x
-decompose (App (V (VLam x e)) (V v2)) c     = RD c (PRApp x e v2)
-decompose (App (V v) e2)              c     = decompose e2 (CtxApp1 v c)
-decompose (App e1 e2)                 c     = decompose e1 (CtxApp0 c e2)
-decompose (Susp e)                    c     = RD c (PRSusp e)
-decompose (Run (V (VSusp e)))         c     = RD c (PRRun e)
-decompose (Run e)                     c     = decompose e (CtxRun c)
-decompose (Con f es)                  c     = case partition es of
-  Left vs -> RD c (PRCon f vs)
-  Right (vs, e, es) -> decompose e (CtxCon f vs c es)
-decompose (Match (V (VCon x vs)) pes) c     = RD c (PRMatch x vs pes)
-decompose (Match e pes)               c     = decompose e (CtxMatch c pes)
-decompose (Handle cases (V p) (V v))  c     = RD c (PRRet cases p v)
-decompose (Handle cases (V p) e    )  c     = case decompose e CtxMt of
-  OD c' f' vsv vsm -> if elem f' (concat $ map (namesOf . fst) cases)
-    then RD c (PROp f' vsv vsm cases p c')
-    else OD (compose c' (CtxHandle1 cases p c)) f' vsv vsm
-  RD c' pr -> RD (compose c' (CtxHandle1 cases p c)) pr
-decompose (Handle cases ep e)         c     = decompose ep (CtxHandle0 cases c e)
-decompose (Op f esv esm)              c     = case partition esv of
-  Left vsv -> case partition esm of
-    Left vsm -> OD c f vsv vsm
-    Right (vsm, e, esm) -> decompose e (CtxOp1 f vsv vsm c esm)
-  Right (vsv, e, esv) -> decompose e (CtxOp0 f vsv c esv esm)
-decompose (Letrec x e1 e2)            c     = RD c (PRLetrec x e1 e2)
-decompose (BOp (V v1) bop (V v2))     c     = RD c (PRBOp v1 bop v2)
-decompose (BOp (V v1) bop e2)         c     = decompose e2 (CtxBOp1 v1 bop c)
-decompose (BOp e1 bop e2)             c     = decompose e1 (CtxBOp0 c bop e2)
-decompose e c = error $ "Cannot decompose: " ++ show e ++ "\nin: " ++ show c
+decompose (V v)                       c = decompose_aux c v
+decompose (Num i)                     c = decompose_aux c (VNum i)
+decompose (Lam x e)                   c = decompose_aux c (VLam x e)
+decompose (Susp e)                    c = decompose_aux c (VSusp e)
+decompose (Var x)                     _ = error $ "Error: free variable " ++ x
+decompose (App e1 e2)                 c = decompose e1 (CtxApp0 c e2)
+decompose (Run e)                     c = decompose e (CtxRun c)
+decompose (Con f es)                  c = case es of
+  []     -> decompose_aux c (VCon f [])
+  (e:es) -> decompose e (CtxCon f [] c es)
+decompose (Match e pes)               c = decompose e (CtxMatch c pes)
+decompose (Handle cases ep e)         c = decompose ep (CtxHandle0 cases c e)
+decompose (Op f esv esm)              c = case esv of
+  []     -> case esm of
+    []      -> RD c (PROp f [] [])
+    (e:esm) -> decompose e (CtxOp1 f [] [] c esm)
+  (e:es) -> decompose e (CtxOp0 f [] c es esm)
+decompose (Letrec x e1 e2)            c = RD c (PRLetrec x e1 e2)
+decompose (BOp e1 bop e2)             c = decompose e1 (CtxBOp0 c bop e2)
 
-
-partition :: [Expr] -> Either [Val] ([Val], Expr, [Expr])
-partition []     = Left []
-partition (V v:es) = case partition es of
-  Left vs -> Left (v:vs)
-  Right (vs, e, es) -> Right (v:vs, e, es)
-partition (e:es) = case partition es of
-  Left vs -> Right ([], e, map V vs)
-  Right (vs, e', es) -> Right ([], e, map V vs ++ e':es)
+decompose_aux :: Ctx -> Val -> Decomp
+decompose_aux CtxMt                  v  = VD v
+decompose_aux (CtxApp0 c e2)         v1 = decompose e2 (CtxApp1 v1 c)
+decompose_aux (CtxApp1 v1 c)         v2 = case v1 of
+  (VLam x e) -> RD c (PRApp x e v2)
+  _          -> error $ "Type error: cannot apply non-function value " ++ show v1 ++ " to the value " ++ show v2
+decompose_aux (CtxRun c)              v  = case v of
+  (VSusp e) -> RD c (PRRun e)
+  _         -> error $ "Type error: cannot run non-suspension value " ++ show v
+decompose_aux (CtxMatch c pes)        v  = case v of
+  (VCon x vs) -> RD c (PRMatch x vs pes)
+  _           -> error $ "Type error: cannot match on non-constructor value " ++ show v
+decompose_aux (CtxHandle0 cases c e)  v  = decompose e (CtxHandle1 cases v c)
+decompose_aux (CtxHandle1 cases vp c) v  = RD c (PRRet cases vp v)
+decompose_aux (CtxOp0 f vs c es esm)  v  = case es of
+  []     -> case esm of
+    []      -> RD c (PROp f (vs ++ [v]) [])
+    (e:esm) -> decompose e (CtxOp1 f (vs ++ [v]) [] c esm)
+  (e:es) -> decompose e (CtxOp0 f (vs ++ [v]) c es esm)
+decompose_aux (CtxOp1 f vs vsm c esm) v  = case esm of
+  []      -> RD c (PROp f vs (vsm ++ [v]))
+  (e:esm) -> decompose e (CtxOp1 f vs (vsm ++ [v]) c esm)
+decompose_aux (CtxCon f vs c es)      v  = case es of
+  []     -> RD c (PRCon f (vs ++ [v]))
+  (e:es) -> decompose e (CtxCon f (vs ++ [v]) c es)
+decompose_aux (CtxBOp0 c bop e2)      v  = decompose e2 (CtxBOp1 v bop c)
+decompose_aux (CtxBOp1 v1 bop c)      v  = RD c (PRBOp v1 bop v)
 
 
 compose :: Ctx -> Ctx -> Ctx
@@ -188,7 +192,7 @@ freshC CtxMt              x = x
 freshC (CtxApp0 c e)      x = freshC c (freshE e x)
 freshC (CtxApp1 _ c)      x = freshC c x
 freshC (CtxRun c)         x = freshC c x
-freshC (CtxCon f vs c es) x = freshC c (foldr freshE x es)
+freshC (CtxCon _ _ c es)  x = freshC c (foldr freshE x es)
 freshC (CtxMatch c pes)   x = freshC c (foldr (\ (p, e) x -> if (elem x (bindingsOfPat p)) then freshE e ("." ++ x)
                                                              else freshE e x)
                                               x pes)
@@ -196,19 +200,19 @@ freshC (CtxHandle0 cases c e) x = freshC c (foldr (\ (p, e) x -> if (elem x (bin
                                                                  else freshE e x)
                                                   (freshE e x)
                                                   cases)
-freshC (CtxHandle1 cases v c) x = freshC c (foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p)) then freshE e ("." ++ x)
+freshC (CtxHandle1 cases _ c) x = freshC c (foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p)) then freshE e ("." ++ x)
                                                                  else freshE e x)
                                                   x
                                                   cases)
-freshC (CtxOp0 f vs c esv esm) x = freshC c (foldr freshE (foldr freshE x esv) esm)
-freshC (CtxOp1 f vs vsm c esm) x = freshC c (foldr freshE x esm)
-freshC (CtxBOp0 c bop e1) x = freshC c (freshE e1 x)
-freshC (CtxBOp1 v1 bop c) x = freshC c x
+freshC (CtxOp0 _ _ c esv esm) x = freshC c (foldr freshE (foldr freshE x esv) esm)
+freshC (CtxOp1 _ _ _ c esm) x = freshC c (foldr freshE x esm)
+freshC (CtxBOp0 c _ e1) x = freshC c (freshE e1 x)
+freshC (CtxBOp1 _ _ c) x = freshC c x
 
 
 freshE :: Expr -> String -> String
-freshE (V v)         x = x
-freshE (Num i)       x = x
+freshE (V _)         x = x
+freshE (Num _)       x = x
 freshE (Lam y e)     x | y == x    = freshE e ("." ++ x)
                        | otherwise = freshE e x
 freshE (Var y)       x | y == x    = "." ++ x
@@ -216,7 +220,7 @@ freshE (Var y)       x | y == x    = "." ++ x
 freshE (App e1 e2)   x = freshE e2 (freshE e1 x)
 freshE (Susp e)      x = freshE e x
 freshE (Run e)       x = freshE e x
-freshE (Con f es)    x = foldr freshE x es
+freshE (Con _ es)    x = foldr freshE x es
 freshE (Match e pes) x = foldr (\ (p, e) x -> if (elem x (bindingsOfPat p)) then freshE e ("." ++ x)
                                               else freshE e x)
                                (freshE e x)
@@ -225,25 +229,25 @@ freshE (Handle cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p
                                                     else freshE e x)
                                      (freshE e (freshE ep x))
                                      cases
-freshE (Op f esv esm) x = foldr freshE (foldr freshE x esv) esm
+freshE (Op _ esv esm) x = foldr freshE (foldr freshE x esv) esm
 freshE (Letrec y e1 e2) x | x == y = freshE e2 (freshE e1 ("." ++ x))
                           | otherwise = freshE e2 (freshE e1 x)
-freshE (BOp e1 bop e2) x = freshE e2 (freshE e1 x)
+freshE (BOp e1 _ e2) x = freshE e2 (freshE e1 x)
 
 {- Contraction -}
 
-contract :: PR -> Expr
-contract (PRNum i) = V (VNum i)
-contract (PRLam x e) = V (VLam x e)
-contract (PRApp x e v) = subst e (V v) x
-contract (PRSusp e) = V (VSusp e)
-contract (PRRun e) = e
-contract (PRCon f vs) = V (VCon f vs)
-contract (PRMatch f vs pes) = case match (VCon f vs) pes of
-  Just (r, e) -> foldr (\ (x,v) e -> subst e (V v) x) e r
+contract :: PR -> Ctx -> (Expr, Ctx)
+contract (PRNum i) c = (V $ VNum i, c)
+contract (PRLam x e) c = (V $ VLam x e, c)
+contract (PRApp x e v) c = (subst e (V v) x, c)
+contract (PRSusp e) c = (V $ VSusp e, c)
+contract (PRRun e) c = (e, c)
+contract (PRCon f vs) c = (V $ VCon f vs, c)
+contract (PRMatch f vs pes) c = case match (VCon f vs) pes of
+  Just (r, e) -> (foldr (\ (x,v) e -> subst e (V v) x) e r, c)
   Nothing -> error $ "Pattern match failure on value " ++ (show (VCon f vs))
   where
-    match v           ((PVar x, e):pes)      = Just ([(x,v)], e)
+    match v           ((PVar x, e):_)      = Just ([(x,v)], e)
     match (VCon f vs) ((PCon g ps, e):pes) | f == g && length vs == length ps
                                              = foldr (\ (v,p) m -> do
                                                          (r, e) <- m
@@ -253,48 +257,64 @@ contract (PRMatch f vs pes) = case match (VCon f vs) pes of
                                                      (zip vs ps)
                                            | otherwise
                                              = match (VCon f vs) pes
-    match _ [] = Nothing
-contract (PRRet cases vp v) = case retOf cases of
-  Just (PRet xv xp, e) -> subst (subst e (V vp) xp) (V v) xv
+    match _ _ = Nothing
+contract (PRRet cases vp v) c = case retOf cases of
+  Just (xv, xp, e) -> (subst (subst e (V vp) xp) (V v) xv, c)
   Nothing -> error "Handler is missing return case!"
   where
+    retOf :: [(CPat,Expr)] -> Maybe (String, String, Expr)
     retOf []                  = Nothing
-    retOf ((PRet xv xp, e):_) = Just (PRet xv xp, e)
+    retOf ((PRet xv xp, e):_) = Just (xv, xp, e)
     retOf (_:cases)           = retOf cases
-contract (PROp f vsv vsm cases vp c) =
-  let y = freshC c "x"
-      q = freshC c "p"
-  in case matchOp f vsv vsm cases of
-    Just (POp f' xsv xsm xp xk, e) ->
-      foldr (\ (x,v) e -> subst e (V v) x)
-            (subst (subst e (V vp) xp)
-                   (Lam y
-                      (Lam q
-                         (Handle cases (Var q)
-                            (recompose c (Run (Var y))))))
-                   xk)
-            (zip xsv vsv ++ zip xsm vsm)
-    Nothing -> error $ "Bad redex: the op " ++ f ++ " is unhandled"
+contract (PROp f vs vsm) c = let x = freshC c "x" in case unwind c f vs vsm x (Run (Var x)) of
+  Just (e', c') -> (e', c')
+  Nothing -> error $ "Unhandled op error: " ++ f ++ " is unhandled"
   where
+    unwind :: Ctx -> String -> [Val] -> [Val] -> String -> Expr -> Maybe (Expr, Ctx)
+    unwind CtxMt _ _ _ _ _ = Nothing
+    unwind (CtxApp0 c e2) f vs vsm x e = unwind c f vs vsm x (App e e2)
+    unwind (CtxApp1 v c) f vs vsm x e = unwind c f vs vsm x (App (V v) e)
+    unwind (CtxRun c) f vs vsm x e = unwind c f vs vsm x (Run e)
+    unwind (CtxCon g ws c es) f vs vsm x e = unwind c f vs vsm x (Con g (map V ws ++ e:es))
+    unwind (CtxMatch c pes) f vs vsm x e = unwind c f vs vsm x (Match e pes)
+    unwind (CtxHandle0 cases c e1) f vs vsm x e = unwind c f vs vsm x (Handle cases e e1)
+    unwind (CtxHandle1 cases vp c) f vs vsm x e = case matchOp f vs vsm cases of
+      Nothing -> unwind c f vs vsm x (Handle cases (V vp) e)
+      Just (xsv, xsm, xp, xk, e') ->
+        let q = freshE e "q" in
+        Just ( foldr (\ (x,v) e -> subst e (V v) x)
+                     (subst (subst e' (V vp) xp)
+                            (Lam x
+                               (Lam q
+                                  (Handle cases (Var q) e)))
+                            xk)
+                     (zip xsv vs ++ zip xsm vsm)
+             , c )
+    unwind (CtxOp0 g ws c es0 es1) f vs vsm x e = unwind c f vs vsm x (Op g (map V ws ++ e:es0) es1)
+    unwind (CtxOp1 g ws vs0 c es1) f vs vsm x e = unwind c f vs vsm x (Op g (map V ws) (map V vs0 ++ e:es1))
+    unwind (CtxBOp0 c bop e2) f vs vsm x e = unwind c f vs vsm x (BOp e bop e2)
+    unwind (CtxBOp1 v1 bop c) f vs vsm x e = unwind c f vs vsm x (BOp (V v1) bop e)
+
+    matchOp :: String -> [Val] -> [Val] -> [(CPat, Expr)] -> Maybe ([String], [String], String, String, Expr)
     matchOp f vsv vsm ((POp g xsv xsm xp xk, e):cases)
       | f == g && length vsv == length xsv && length vsm == length xsm
-        = Just (POp g xsv xsm xp xk, e)
+        = Just (xsv, xsm, xp, xk, e)
       | otherwise
         = matchOp f vsv vsm cases
     matchOp f vsv vsm (_:cases) = matchOp f vsv vsm cases
     matchOp _ _ _ _ = Nothing
-contract (PRLetrec x e1 e2) =
-  subst e2 (subst e1 (Letrec x e1 e2) x) x
-contract (PRBOp v1 Eq v2) =
-  if v1 == v2 then Con "True" [] else Con "False" []
-contract (PRBOp v1 Plus v2) = case (v1, v2) of
-  (VNum i1, VNum i2) -> V $ VNum (i1 + i2)
+contract (PRLetrec x e1 e2) c =
+  (subst e2 (subst e1 (Letrec x e1 e2) x) x, c)
+contract (PRBOp v1 Eq v2) c =
+  (if v1 == v2 then Con "True" [] else Con "False" [], c)
+contract (PRBOp v1 Plus v2) c = case (v1, v2) of
+  (VNum i1, VNum i2) -> (V $ VNum (i1 + i2), c)
   p -> error $ "Bad plus expression. Expected sub-expressions to yield numbers, but found: " ++ show p
-contract (PRBOp v1 Times v2) = case (v1, v2) of
-  (VNum i1, VNum i2) -> V $ VNum (i1 * i2)
+contract (PRBOp v1 Times v2) c = case (v1, v2) of
+  (VNum i1, VNum i2) -> (V $ VNum (i1 * i2), c)
   p -> error $ "Bad times expression. Expected sub-expressions to yield numbers, but found: " ++ show p
-contract (PRBOp v1 Minus v2) = case (v1, v2) of
-  (VNum i1, VNum i2) -> V $ VNum (i1 - i2)
+contract (PRBOp v1 Minus v2) c = case (v1, v2) of
+  (VNum i1, VNum i2) -> (V $ VNum (i1 - i2), c)
   p -> error $ "Bad minus expression. Expected sub-expressions to yield numbers, but found: " ++ show p
 
 
@@ -304,5 +324,5 @@ drive :: Expr -> Val
 drive e = --trace (show e ++ "\n") $ 
   case decompose e CtxMt of
     VD v -> v
-    RD c r -> drive (recompose c (contract r))
-    OD _ f _ _ -> error $ "Unhandled op: " ++ f
+    RD c r -> case contract r c of
+      (e', c') -> drive (recompose c' e')
