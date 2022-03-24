@@ -147,14 +147,14 @@ pExpr =
   asum
     [ Lam <$ pLam <*> pVar <* pArr <*> pExpr <?> "Lambda",
       Letrec <$ pLet <*> pVar <* pEq <*> pExpr <* pIn <*> pExpr <?> "Let",
-      pChainl_ng (pure App `micro` 2) ((Run <$> pExprL <* pBang <?> "Enact") <|> pExprL)
+      pChainl_ng (pure App) (((Run <$> pExprL <* pBang <?> "Enact") <|> pExprL) `micro` 1)
     ]
   where
     pExprL :: Parser Expr
     pExprL =
       asum
         [ Susp <$> pBraces pExpr <?> "Suspension",
-          Con <$> pCon <*> pList_ng (pExprL `micro` 1),
+          Con <$> pCon <*> pList_ng pExprL,
           Var <$> pVar,
           Handle <$ pHandle <*> pBraces (pList1Sep pComma pHClause) <*> pExprL <*> pExprL <?> "Handle",
           Match <$ pMatch <*> pExpr <* pWith <*> pBraces (pList pMClause) <?> "Match",
