@@ -21,8 +21,7 @@ data Ctx
   | CtxMatch Ctx [(Pat,Expr)]
   | CtxHandle0 [(CPat, Expr)] Ctx Expr
   | CtxHandle1 [(CPat, Expr)] Val Ctx
-  | CtxOp0 Name [Val] Ctx [Expr] [Expr]
-  | CtxOp1 Name [Val] [Val] Ctx [Expr]
+  | CtxOp0 Name [Val] Ctx [Expr]
   | CtxBOp0 Ctx BinOp Expr
   | CtxBOp1 Val BinOp Ctx
   deriving Show
@@ -67,7 +66,7 @@ data PR
   | PRCon String [Val]
   | PRMatch Name [Val] [(Pat, Expr)]
   | PRRet [(CPat,Expr)] Val Val
-  | PROp Name [Val] [Val]
+  | PROp Name [Val]
   | PRLetrec String Expr Expr
   | PRBOp Val BinOp Val
 
@@ -92,11 +91,9 @@ decompose (Con f es)                  c = case es of
   (e:es) -> decompose e (CtxCon f [] c es)
 decompose (Match e pes)               c = decompose e (CtxMatch c pes)
 decompose (Handle cases ep e)         c = decompose ep (CtxHandle0 cases c e)
-decompose (Op f esv esm)              c = case esv of
-  []     -> case esm of
-    []      -> RD c (PROp f [] [])
-    (e:esm) -> decompose e (CtxOp1 f [] [] c esm)
-  (e:es) -> decompose e (CtxOp0 f [] c es esm)
+decompose (Op f esv)                  c = case esv of
+  []     -> RD c (PROp f [])
+  (e:es) -> decompose e (CtxOp0 f [] c es)
 decompose (Letrec x e1 e2)            c = RD c (PRLetrec x e1 e2)
 decompose (BOp e1 bop e2)             c = decompose e1 (CtxBOp0 c bop e2)
 
@@ -114,14 +111,9 @@ decompose_aux (CtxMatch c pes)        v  = case v of
   _           -> error $ "Type error: cannot match on non-constructor value " ++ show v
 decompose_aux (CtxHandle0 cases c e)  v  = decompose e (CtxHandle1 cases v c)
 decompose_aux (CtxHandle1 cases vp c) v  = RD c (PRRet cases vp v)
-decompose_aux (CtxOp0 f vs c es esm)  v  = case es of
-  []     -> case esm of
-    []      -> RD c (PROp f (vs ++ [v]) [])
-    (e:esm) -> decompose e (CtxOp1 f (vs ++ [v]) [] c esm)
-  (e:es) -> decompose e (CtxOp0 f (vs ++ [v]) c es esm)
-decompose_aux (CtxOp1 f vs vsm c esm) v  = case esm of
-  []      -> RD c (PROp f vs (vsm ++ [v]))
-  (e:esm) -> decompose e (CtxOp1 f vs (vsm ++ [v]) c esm)
+decompose_aux (CtxOp0 f vs c es)  v  = case es of
+  []     -> RD c (PROp f (vs ++ [v]))
+  (e:es) -> decompose e (CtxOp0 f (vs ++ [v]) c es)
 decompose_aux (CtxCon f vs c es)      v  = case es of
   []     -> RD c (PRCon f (vs ++ [v]))
   (e:es) -> decompose e (CtxCon f (vs ++ [v]) c es)
@@ -130,33 +122,31 @@ decompose_aux (CtxBOp1 v1 bop c)      v  = RD c (PRBOp v1 bop v)
 
 
 compose :: Ctx -> Ctx -> Ctx
-compose CtxMt                     c2 = c2
-compose (CtxApp0 c1 e)            c2 = CtxApp0 (compose c1 c2) e
-compose (CtxApp1 v c1)            c2 = CtxApp1 v (compose c1 c2)
-compose (CtxRun c1)               c2 = CtxRun (compose c1 c2)
-compose (CtxCon f vs c1 es)       c2 = CtxCon f vs (compose c1 c2) es
-compose (CtxMatch c1 pes)         c2 = CtxMatch (compose c1 c2) pes
-compose (CtxHandle0 cases c1 e)   c2 = CtxHandle0 cases (compose c1 c2) e
-compose (CtxHandle1 cases v c1)   c2 = CtxHandle1 cases v (compose c1 c2)
-compose (CtxOp0 x vsv c1 esv esm) c2 = CtxOp0 x vsv (compose c1 c2) esv esm
-compose (CtxOp1 x vsv vsm c1 esm) c2 = CtxOp1 x vsv vsm (compose c1 c2) esm
-compose (CtxBOp0 c1 bop e2)       c2 = CtxBOp0 (compose c1 c2) bop e2
-compose (CtxBOp1 v1 bop c1)       c2 = CtxBOp1 v1 bop (compose c1 c2)
+compose CtxMt                   c2 = c2
+compose (CtxApp0 c1 e)          c2 = CtxApp0 (compose c1 c2) e
+compose (CtxApp1 v c1)          c2 = CtxApp1 v (compose c1 c2)
+compose (CtxRun c1)             c2 = CtxRun (compose c1 c2)
+compose (CtxCon f vs c1 es)     c2 = CtxCon f vs (compose c1 c2) es
+compose (CtxMatch c1 pes)       c2 = CtxMatch (compose c1 c2) pes
+compose (CtxHandle0 cases c1 e) c2 = CtxHandle0 cases (compose c1 c2) e
+compose (CtxHandle1 cases v c1) c2 = CtxHandle1 cases v (compose c1 c2)
+compose (CtxOp0 x vsv c1 esv)   c2 = CtxOp0 x vsv (compose c1 c2) esv
+compose (CtxBOp0 c1 bop e2)     c2 = CtxBOp0 (compose c1 c2) bop e2
+compose (CtxBOp1 v1 bop c1)     c2 = CtxBOp1 v1 bop (compose c1 c2)
 
 
 recompose :: Ctx -> Expr -> Expr
-recompose CtxMt                    e = e
-recompose (CtxApp0 c e2)           e = recompose c (App e e2)
-recompose (CtxApp1 v c)            e = recompose c (App (V v) e)
-recompose (CtxRun c)               e = recompose c (Run e)
-recompose (CtxCon f vs c es)       e = recompose c (Con f (map V vs ++ e:es))
-recompose (CtxMatch c pes)         e = recompose c (Match e pes)
-recompose (CtxHandle0 cases c e1)  e = recompose c (Handle cases e    e1)
-recompose (CtxHandle1 cases v c)   e = recompose c (Handle cases (V v) e)
-recompose (CtxOp0 f vs c es0 es1)  e = recompose c (Op f (map V vs ++ e : es0) es1)
-recompose (CtxOp1 f vs0 vs1 c es1) e = recompose c (Op f (map V vs0) (map V vs1 ++ e : es1))
-recompose (CtxBOp0 c bop e2)       e = recompose c (BOp e bop e2)
-recompose (CtxBOp1 v1 bop c)       e = recompose c (BOp (V v1) bop e)
+recompose CtxMt                   e = e
+recompose (CtxApp0 c e2)          e = recompose c (App e e2)
+recompose (CtxApp1 v c)           e = recompose c (App (V v) e)
+recompose (CtxRun c)              e = recompose c (Run e)
+recompose (CtxCon f vs c es)      e = recompose c (Con f (map V vs ++ e:es))
+recompose (CtxMatch c pes)        e = recompose c (Match e pes)
+recompose (CtxHandle0 cases c e1) e = recompose c (Handle cases e    e1)
+recompose (CtxHandle1 cases v c)  e = recompose c (Handle cases (V v) e)
+recompose (CtxOp0 f vs c es)      e = recompose c (Op f (map V vs ++ e : es))
+recompose (CtxBOp0 c bop e2)      e = recompose c (BOp e bop e2)
+recompose (CtxBOp1 v1 bop c)      e = recompose c (BOp (V v1) bop e)
 
 
 {- Substitution -}
@@ -180,7 +170,7 @@ subst (Handle cases e1 e2) v x = Handle (map (\ (p,e) ->
                                                 else (p, subst e v x)) cases)
                                         (subst e1 v x)
                                         (subst e2 v x)
-subst (Op f evs ems) v x = Op f (map (\ e -> subst e v x) evs) (map (\ e -> subst e v x) ems)
+subst (Op f evs) v x = Op f (map (\ e -> subst e v x) evs)
 subst (Letrec y e1 e2) v x | x == y = Letrec y e1 e2
                            | otherwise = Letrec y (subst e1 v x) (subst e2 v x)
 subst (BOp e1 bop e2) v x = BOp (subst e1 v x) bop (subst e2 v x)
@@ -205,8 +195,7 @@ freshC (CtxHandle1 cases _ c) x = freshC c (foldr (\ (p, e) x -> if (elem x (bin
                                                                  else freshE e x)
                                                   x
                                                   cases)
-freshC (CtxOp0 _ _ c esv esm) x = freshC c (foldr freshE (foldr freshE x esv) esm)
-freshC (CtxOp1 _ _ _ c esm) x = freshC c (foldr freshE x esm)
+freshC (CtxOp0 _ _ c es) x = freshC c (foldr freshE x es)
 freshC (CtxBOp0 c _ e1) x = freshC c (freshE e1 x)
 freshC (CtxBOp1 _ _ c) x = freshC c x
 
@@ -230,7 +219,7 @@ freshE (Handle cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p
                                                     else freshE e x)
                                      (freshE e (freshE ep x))
                                      cases
-freshE (Op _ esv esm) x = foldr freshE (foldr freshE x esv) esm
+freshE (Op _ esv) x = foldr freshE x esv
 freshE (Letrec y e1 e2) x | x == y = freshE e2 (freshE e1 ("." ++ x))
                           | otherwise = freshE e2 (freshE e1 x)
 freshE (BOp e1 _ e2) x = freshE e2 (freshE e1 x)
@@ -267,21 +256,21 @@ contract (PRRet cases vp v) c = case retOf cases of
     retOf []                  = Nothing
     retOf ((PRet xv xp, e):_) = Just (xv, xp, e)
     retOf (_:cases)           = retOf cases
-contract (PROp f vs vsm) c = let x = freshC c "x" in case unwind c f vs vsm x (Run (Var x)) of
+contract (PROp f vs) c = let x = freshC c "x" in case unwind c f vs x (Run (Var x)) of
   Just (e', c') -> (e', c')
   Nothing -> error $ "Unhandled op error: " ++ f ++ " is unhandled"
   where
-    unwind :: Ctx -> String -> [Val] -> [Val] -> String -> Expr -> Maybe (Expr, Ctx)
-    unwind CtxMt _ _ _ _ _ = Nothing
-    unwind (CtxApp0 c e2) f vs vsm x e = unwind c f vs vsm x (App e e2)
-    unwind (CtxApp1 v c) f vs vsm x e = unwind c f vs vsm x (App (V v) e)
-    unwind (CtxRun c) f vs vsm x e = unwind c f vs vsm x (Run e)
-    unwind (CtxCon g ws c es) f vs vsm x e = unwind c f vs vsm x (Con g (map V ws ++ e:es))
-    unwind (CtxMatch c pes) f vs vsm x e = unwind c f vs vsm x (Match e pes)
-    unwind (CtxHandle0 cases c e1) f vs vsm x e = unwind c f vs vsm x (Handle cases e e1)
-    unwind (CtxHandle1 cases vp c) f vs vsm x e = case matchOp f vs vsm cases of
-      Nothing -> unwind c f vs vsm x (Handle cases (V vp) e)
-      Just (xsv, xsm, xp, xk, e') ->
+    unwind :: Ctx -> String -> [Val] -> String -> Expr -> Maybe (Expr, Ctx)
+    unwind CtxMt _ _ _ _ = Nothing
+    unwind (CtxApp0 c e2) f vs x e = unwind c f vs x (App e e2)
+    unwind (CtxApp1 v c) f vs x e = unwind c f vs x (App (V v) e)
+    unwind (CtxRun c) f vs x e = unwind c f vs x (Run e)
+    unwind (CtxCon g ws c es) f vs x e = unwind c f vs x (Con g (map V ws ++ e:es))
+    unwind (CtxMatch c pes) f vs x e = unwind c f vs x (Match e pes)
+    unwind (CtxHandle0 cases c e1) f vs x e = unwind c f vs x (Handle cases e e1)
+    unwind (CtxHandle1 cases vp c) f vs x e = case matchOp f vs cases of
+      Nothing -> unwind c f vs x (Handle cases (V vp) e)
+      Just (xsv, xp, xk, e') ->
         let q = freshE e "q" in
         Just ( foldr (\ (x,v) e -> subst e (V v) x)
                      (subst (subst e' (V vp) xp)
@@ -289,21 +278,20 @@ contract (PROp f vs vsm) c = let x = freshC c "x" in case unwind c f vs vsm x (R
                                (Lam q
                                   (Handle cases (Var q) e)))
                             xk)
-                     (zip xsv vs ++ zip xsm vsm)
+                     (zip xsv vs)
              , c )
-    unwind (CtxOp0 g ws c es0 es1) f vs vsm x e = unwind c f vs vsm x (Op g (map V ws ++ e:es0) es1)
-    unwind (CtxOp1 g ws vs0 c es1) f vs vsm x e = unwind c f vs vsm x (Op g (map V ws) (map V vs0 ++ e:es1))
-    unwind (CtxBOp0 c bop e2) f vs vsm x e = unwind c f vs vsm x (BOp e bop e2)
-    unwind (CtxBOp1 v1 bop c) f vs vsm x e = unwind c f vs vsm x (BOp (V v1) bop e)
+    unwind (CtxOp0 g ws c es) f vs x e = unwind c f vs x (Op g (map V ws ++ e:es))
+    unwind (CtxBOp0 c bop e2) f vs x e = unwind c f vs x (BOp e bop e2)
+    unwind (CtxBOp1 v1 bop c) f vs x e = unwind c f vs x (BOp (V v1) bop e)
 
-    matchOp :: String -> [Val] -> [Val] -> [(CPat, Expr)] -> Maybe ([String], [String], String, String, Expr)
-    matchOp f vsv vsm ((POp g xsv xsm xp xk, e):cases)
-      | f == g && length vsv == length xsv && length vsm == length xsm
-        = Just (xsv, xsm, xp, xk, e)
+    matchOp :: String -> [Val] -> [(CPat, Expr)] -> Maybe ([String], String, String, Expr)
+    matchOp f vsv ((POp g xsv xp xk, e):cases)
+      | f == g && length vsv == length xsv
+        = Just (xsv, xp, xk, e)
       | otherwise
-        = matchOp f vsv vsm cases
-    matchOp f vsv vsm (_:cases) = matchOp f vsv vsm cases
-    matchOp _ _ _ _ = Nothing
+        = matchOp f vsv cases
+    matchOp f vsv (_:cases) = matchOp f vsv cases
+    matchOp _ _ _ = Nothing
 contract (PRLetrec x e1 e2) c =
   (subst e2 (subst e1 (Letrec x e1 (Var x)) x) x, c)
 contract (PRBOp v1 Eq v2) c =
@@ -337,3 +325,5 @@ drive e = --trace (show e ++ "\n") $
     VD v -> v
     RD c r -> case contract r c of
       (e', c') -> drive (recompose c' e')
+
+

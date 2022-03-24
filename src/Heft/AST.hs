@@ -11,7 +11,7 @@ e ::= v
     | match e with patcase*
     | con x e*
     | handle case* with e in e
-    | op f e* e*
+    | op f e*
     | letrec x = e in e          -- Assumes that e is pure (returns a value without any side-effects)
     | e ⊕ e
 
@@ -26,7 +26,7 @@ v ::= vlam x e
 
 
 case ::= return x p = e
-       | op f x* m* p k = e
+       | op f x* p k = e
 
 
 patcase ::= pcon x p* | pvar x
@@ -48,7 +48,7 @@ data Expr = V Val
           | Con String [Expr]
           | Match Expr [(Pat, Expr)]
           | Handle [(CPat,Expr)] Expr Expr
-          | Op Name [Expr] [Expr]
+          | Op Name [Expr]
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr
   deriving Show
@@ -83,7 +83,7 @@ show' v@(VCon "::" [_, _]) = "(" ++ show v ++ ")"
 show' v = show v
 
 data CPat = PRet String String
-          | POp Name [String] [String] String String
+          | POp Name [String] String String
   deriving Show
 
 bindingsOfPat :: Pat -> [String]
@@ -92,8 +92,8 @@ bindingsOfPat (PCon _ ps) = concatMap bindingsOfPat ps
 
 namesOf :: CPat -> [Name]
 namesOf (PRet _ _) = []
-namesOf (POp f _ _ _ _) = [f]
+namesOf (POp f _ _ _) = [f]
 
 bindingsOfCPat :: CPat -> [String]
 bindingsOfCPat (PRet x p) = [x,p]
-bindingsOfCPat (POp _ xsv xsm xp xk) = xsv ++ xsm ++ [xp, xk]
+bindingsOfCPat (POp _ xs xp xk) = xs ++ [xp, xk]

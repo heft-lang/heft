@@ -168,7 +168,7 @@ pCPat :: Parser CPat
 pCPat =
   asum
     [ PRet <$ pReturn <*> pVar <*> pVar <?> "Return Clause",
-      POp <$> pVar <*> pList pVar <*> pBraces (pList pVar) <*> pVar <*> pVar <?> "Operator Clause"
+      POp <$> pVar <*> pList pVar <*> pVar <*> pVar <?> "Operator Clause"
     ]
 
 pMClause :: Parser (Pat, Expr)
