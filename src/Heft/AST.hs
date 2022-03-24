@@ -88,7 +88,7 @@ data CPat = PRet String String
 
 bindingsOfPat :: Pat -> [String]
 bindingsOfPat (PVar x)    = [x]
-bindingsOfPat (PCon f ps) = concatMap bindingsOfPat ps
+bindingsOfPat (PCon _ ps) = concatMap bindingsOfPat ps
 
 namesOf :: CPat -> [Name]
 namesOf (PRet _ _) = []
