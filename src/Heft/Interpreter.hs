@@ -327,9 +327,3 @@ drive e = --trace (show e ++ "\n") $
     VD v -> v
     RD c r -> case contract r c of
       (e', c') -> drive (recompose c' e')
-
-{-
-
-Parsed Expression:
-Letrec "add" (Lam "x" (Lam "y" (Match (Var "x") [(PCon "S" [PVar "z"],Con "S" [App (App (Var "add") (Var "z")) (Var "y")]),(PCon "Z" [],Var "y")]))) (Letrec "fib" (Lam "x" (Match (Var "x") [(PCon "S" [PVar "y"],Match (Var "y") [(PCon "S" [PVar "z"],App (App (Var "add") (App (Var "fib") (Var "y"))) (App (Var "fib") (Var "z"))),(PCon "Z" [],Var "x")]),(PCon "Z" [],Var "x")])) (App (App (Var "add") (Con "S" [Con "Z" []])) (Con "S" [Con "Z" []])))
--}
