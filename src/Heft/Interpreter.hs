@@ -319,6 +319,16 @@ contract (PRBOp v1 Minus v2) c = case (v1, v2) of
   p -> error $ "Bad minus expression. Expected sub-expressions to yield numbers, but found: " ++ show p
 
 
+{- Refocused iteration -}
+
+iter :: Decomp -> Val
+iter (VD v) = v
+iter (RD c r) = iter (uncurry decompose $ contract r c)
+
+eval :: Expr -> Val
+eval e = iter (decompose e CtxMt)
+
+
 {- Drive -}
 
 drive :: Expr -> Val
