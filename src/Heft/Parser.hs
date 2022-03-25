@@ -18,7 +18,7 @@ import Text.ParserCombinators.UU
     pList,
     pList1,
     pList_ng,
-    parse_h,
+    parse_h, pList1_ng
   )
 import Text.ParserCombinators.UU.BasicInstances
   ( Error (Deleted, DeletedAtEnd, Inserted, Replaced),
@@ -124,8 +124,8 @@ pExpr =
       Letrec <$ pLet <*> pVar <* pEq <*> pExpr <* pIn <*> pExpr <?> "Let",
       Handle <$ pHandle <*> pBraces (pList pHClause) <*> pExpr1 <*> pExpr1 <?> "Handle",
       Match <$ pMatch <*> pExpr <*> pBraces (pList pMClause) <?> "Match",
-      Con <$> pCon <*> pList_ng pExpr1,
-      Op <$> pOp <*> pList_ng pExpr1,
+      Con <$> pCon <*> pList1_ng pExpr1,
+      Op <$> pOp <*> pList1_ng pExpr1,
       foldl1 App <$> pList_ng (pExpr1 `micro` 1)
     ]
   where
@@ -135,8 +135,8 @@ pExpr =
         <$> asum
           [ Susp <$> pBraces pExpr <?> "Suspension",
             Var <$> pVar,
-            Con <$> pCon <*> pure [] `micro` 1,
-            Op <$> pOp <*> pure [] `micro` 1,
+            Con <$> pCon <*> pure [],
+            Op <$> pOp <*> pure [],
             pParens pExpr <?> "Parens"
           ]
           <*> pList pBang

@@ -1,4 +1,4 @@
 (handle {
-  | ask p k -> k p { S Z }
+  | ask p k -> k { S Z } p
   | return x p -> { x }
-} Z `ask!)!
+} Z `ask)!
