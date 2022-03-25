@@ -8,7 +8,6 @@ module Heft.Parser where
 import Control.Applicative (Alternative ((<|>)))
 import Data.Char (isAlphaNum, isSpace)
 import Data.Foldable (asum)
-import Debug.Trace (trace)
 import Heft.AST
 import Text.ParserCombinators.UU
   ( ExtAlternative (opt, (<?>)),
@@ -18,7 +17,6 @@ import Text.ParserCombinators.UU
     pList,
     pList1,
     pList_ng,
-    pState,
     parse_h, IsParser, parse
   )
 import Text.ParserCombinators.UU.BasicInstances
@@ -96,9 +94,6 @@ runParser inputName p str
         inputFrag = replicate (30 - pos) ' ' ++ take 71 (drop (pos - 30) s')
 
 -- Tokens
-
-pTrace :: String -> P s a -> P s a
-pTrace msg p = (\s x -> s `seq` trace msg x) <$> pState <*> p
 
 pCon, pVar, pLam, pArr, pEq, pIn, pLet, pHandle, pReturn, pMatch, pPipe, pBang, pLBrace, pRBrace, pLParen, pRParen :: Parser String
 pCon = lexeme $ ((:) <$> pUpper <*> pMunch isAlphaNum) <?> "Constructor"
