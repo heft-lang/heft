@@ -1,7 +1,8 @@
-module Heft.Interpreter where
+module Heft.Refocus.Interpreter0 where
 
 import Heft.AST
 --import Debug.Trace
+
 
 {- Contexts
 
@@ -25,6 +26,7 @@ data Ctx
   | CtxBOp0 Ctx BinOp Expr
   | CtxBOp1 Val BinOp Ctx
   deriving Show
+
 
 {- Semantics (selected rules):
 
@@ -225,18 +227,25 @@ freshE (Letrec y e1 e2) x | x == y = freshE e2 (freshE e1 ("." ++ x))
                           | otherwise = freshE e2 (freshE e1 x)
 freshE (BOp e1 _ e2) x = freshE e2 (freshE e1 x)
 
-{- Contraction -}
 
-contract :: PR -> Ctx -> (Expr, Ctx)
-contract (PRNum i) c = (V $ VNum i, c)
-contract (PRLam x e) c = (V $ VLam x e, c)
-contract (PRApp x e v) c = (subst e (V v) x, c)
-contract (PRSusp e) c = (V $ VSusp e, c)
-contract (PRRun e) c = (e, c)
-contract (PRCon f vs) c = (V $ VCon f vs, c)
-contract (PRMatch f vs pes) c = case match (VCon f vs) pes of
-  Just (r, e) -> (foldr (\ (x,v) e -> subst e (V v) x) e r, c)
-  Nothing -> error $ "Pattern match failure on value " ++ (show (VCon f vs))
+
+{- Refocused iteration -}
+
+-- inlining the contraction function
+
+iter :: Decomp -> Val
+iter (VD v) = v
+iter (RD c (PRNum i)) = iter $ decompose (V $ VNum i) c
+iter (RD c (PRLam x e)) = iter $ decompose (V $ VLam x e) c
+iter (RD c (PRApp x e v)) = iter $ decompose (subst e (V v) x) c
+iter (RD c (PRSusp e)) = iter $ decompose (V $ VSusp e) c
+iter (RD c (PRRun e)) = iter $ decompose e c
+iter (RD c (PRCon f vs)) = iter $ decompose (V $ VCon f vs) c
+iter (RD c (PRMatch f vs pes)) = iter $ decompose
+  (case match (VCon f vs) pes of
+    Just (r, e) -> foldr (\ (x,v) e -> subst e (V v) x) e r
+    Nothing -> error $ "Pattern match failure on value " ++ (show (VCon f vs)))
+  c
   where
     match v           ((PVar x, e):_)      = Just ([(x,v)], e)
     match (VCon f vs) ((PCon g ps, e):pes) | f == g && length vs == length ps
@@ -249,16 +258,18 @@ contract (PRMatch f vs pes) c = case match (VCon f vs) pes of
                                            | otherwise
                                              = match (VCon f vs) pes
     match _ _ = Nothing
-contract (PRRet cases vp v) c = case retOf cases of
-  Just (xv, xp, e) -> (subst (subst e (V vp) xp) (V v) xv, c)
-  Nothing -> error "Handler is missing return case!"
+iter (RD c (PRRet cases vp v)) = iter $ decompose
+  (case retOf cases of
+    Just (xv, xp, e) -> subst (subst e (V vp) xp) (V v) xv
+    Nothing -> error "Handler is missing return case!")
+  c
   where
     retOf :: [(CPat,Expr)] -> Maybe (String, String, Expr)
     retOf []                  = Nothing
     retOf ((PRet xv xp, e):_) = Just (xv, xp, e)
     retOf (_:cases)           = retOf cases
-contract (PROp f vs) c = let x = freshC c "x" in case unwind c f vs x (Run (Var x)) of
-  Just (e', c') -> (e', c')
+iter (RD c (PROp f vs)) = let x = freshC c "x" in case unwind c f vs x (Run (Var x)) of
+  Just (e', c') -> iter $ decompose e' c'
   Nothing -> error $ "Unhandled op error: " ++ f ++ " is unhandled"
   where
     unwind :: Ctx -> String -> [Val] -> String -> Expr -> Maybe (Expr, Ctx)
@@ -293,38 +304,25 @@ contract (PROp f vs) c = let x = freshC c "x" in case unwind c f vs x (Run (Var 
         = matchOp f vsv cases
     matchOp f vsv (_:cases) = matchOp f vsv cases
     matchOp _ _ _ = Nothing
-contract (PRLetrec x e1 e2) c =
-  (subst e2 (subst e1 (Letrec x e1 (Var x)) x) x, c)
-contract (PRBOp v1 Eq v2) c =
-  (if v1 == v2 then Con "True" [] else Con "False" [], c)
-contract (PRBOp v1 Plus v2) c = case (v1, v2) of
-  (VNum i1, VNum i2) -> (V $ VNum (i1 + i2), c)
-  p -> error $ "Bad plus expression. Expected sub-expressions to yield numbers, but found: " ++ show p
-contract (PRBOp v1 Times v2) c = case (v1, v2) of
-  (VNum i1, VNum i2) -> (V $ VNum (i1 * i2), c)
-  p -> error $ "Bad times expression. Expected sub-expressions to yield numbers, but found: " ++ show p
-contract (PRBOp v1 Minus v2) c = case (v1, v2) of
-  (VNum i1, VNum i2) -> (V $ VNum (i1 - i2), c)
-  p -> error $ "Bad minus expression. Expected sub-expressions to yield numbers, but found: " ++ show p
-
-
-{- Refocused iteration -}
-
-iter :: Decomp -> Val
-iter (VD v) = v
-iter (RD c r) = iter (uncurry decompose $ contract r c)
+iter (RD c (PRLetrec x e1 e2)) = iter $ decompose (subst e2 (subst e1 (Letrec x e1 (Var x)) x) x) c
+iter (RD c (PRBOp v1 Eq v2)) = iter $ decompose (if v1 == v2 then Con "True" [] else Con "False" []) c
+iter (RD c (PRBOp v1 Plus v2)) = iter $ decompose
+  (case (v1, v2) of
+    (VNum i1, VNum i2) -> V $ VNum (i1 + i2)
+    p -> error $ "Bad plus expression. Expected sub-expressions to yield numbers, but got: " ++ show p)
+  c
+iter (RD c (PRBOp v1 Times v2)) = iter $ decompose
+  (case (v1, v2) of
+    (VNum i1, VNum i2) -> V $ VNum (i1 * i2)
+    p -> error $ "Bad times expression. Expected sub-expressions to yield numbers, but got: " ++ show p)
+  c
+iter (RD c (PRBOp v1 Minus v2)) = iter $ decompose
+  (case (v1, v2) of
+    (VNum i1, VNum i2) -> V $ VNum (i1 - i2)
+    p -> error $ "Bad minus expression. Expected sub-expressions to yield numbers, but got: " ++ show p)
+  c
+  
 
 eval :: Expr -> Val
 eval e = iter (decompose e CtxMt)
-
-
-{- Drive -}
-
-drive :: Expr -> Val
-drive e = --trace (show e ++ "\n") $ 
-  case decompose e CtxMt of
-    VD v -> v
-    RD c r -> case contract r c of
-      (e', c') -> drive (recompose c' e')
-
 

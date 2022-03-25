@@ -10,7 +10,7 @@ e ::= v
     | e!
     | match e with patcase*
     | con x e*
-    | handle case* with e in e
+    | handle e e { case* }
     | op f e*
     | letrec x = e in e          -- Assumes that e is pure (returns a value without any side-effects)
     | e ⊕ e
