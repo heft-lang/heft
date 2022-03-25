@@ -11,13 +11,14 @@ import Data.Foldable (asum)
 import Heft.AST
 import Text.ParserCombinators.UU
   ( ExtAlternative (opt, (<?>)),
+    IsParser,
     P,
     micro,
     pEnd,
     pList,
     pList1,
     pList_ng,
-    parse_h, IsParser, parse
+    parse_h,
   )
 import Text.ParserCombinators.UU.BasicInstances
   ( Error (Deleted, DeletedAtEnd, Inserted, Replaced),
@@ -27,6 +28,7 @@ import Text.ParserCombinators.UU.BasicInstances
     createStr,
     pMunch,
     pSatisfy,
+    pSym,
     pToken,
     show_expecting,
   )
@@ -55,9 +57,6 @@ pKey k = lexeme $ pToken k
 -- | The lower-level interface. Returns all errors.
 execParser :: Parser a -> String -> (a, [Error LineColPos])
 execParser p = parse_h ((,) <$ ignore <*> p <*> pEnd) . createStr (LineColPos 0 0 0)
-
-onlineParser :: Parser a -> String -> (a, [Error LineColPos])
-onlineParser p = parse ((,) <$ ignore <*> p <*> pEnd) . createStr (LineColPos 0 0 0)
 
 -- | The higher-level interface. (Calls 'error' with a simplified error).
 --   Runs the parser; if the complete input is accepted without problems  return the
@@ -95,7 +94,7 @@ runParser inputName p str
 
 -- Tokens
 
-pCon, pVar, pLam, pArr, pEq, pIn, pLet, pHandle, pReturn, pMatch, pPipe, pBang, pLBrace, pRBrace, pLParen, pRParen :: Parser String
+pCon, pVar, pLam, pArr, pEq, pIn, pLet, pHandle, pReturn, pMatch, pPipe, pBang, pLBrace, pRBrace, pLParen, pRParen, pOp :: Parser String
 pCon = lexeme $ ((:) <$> pUpper <*> pMunch isAlphaNum) <?> "Constructor"
 pVar = lexeme $ ((:) <$> pLower <*> pMunch isAlphaNum) `micro` 1 <?> "Variable"
 pLam = pKey "λ" <|> pKey "\\"
@@ -112,6 +111,7 @@ pLBrace = pKey "{"
 pRBrace = pKey "}"
 pLParen = pKey "("
 pRParen = pKey ")"
+pOp = lexeme $ (:) <$ pSym '`' <*> pLower <*> pMunch isAlphaNum <?> "Operator"
 
 pBraces, pParens :: Parser a -> Parser a
 pBraces p = pLBrace *> p <* pRBrace
@@ -125,17 +125,21 @@ pExpr =
       Handle <$ pHandle <*> pBraces (pList pHClause) <*> pExpr1 <*> pExpr1 <?> "Handle",
       Match <$ pMatch <*> pExpr <*> pBraces (pList pMClause) <?> "Match",
       Con <$> pCon <*> pList_ng pExpr1,
+      Op <$> pOp <*> pList_ng pExpr1,
       foldl1 App <$> pList_ng (pExpr1 `micro` 1)
     ]
   where
     pExpr1 :: Parser Expr
-    pExpr1 = foldr (const Run) <$>
-      asum
-        [ Susp <$> pBraces pExpr <?> "Suspension",
-          Con <$> pCon <*> pure [] `micro` 1,
-          Var <$> pVar,
-          pParens pExpr <?> "Parens"
-        ] <*> pList pBang
+    pExpr1 =
+      foldr (const Run)
+        <$> asum
+          [ Susp <$> pBraces pExpr <?> "Suspension",
+            Var <$> pVar,
+            Con <$> pCon <*> pure [] `micro` 1,
+            Op <$> pOp <*> pure [] `micro` 1,
+            pParens pExpr <?> "Parens"
+          ]
+          <*> pList pBang
 
 pHClause :: Parser (CPat, Expr)
 pHClause = (,) <$ pPipe <*> pCPat <* pArr <*> pExpr <?> "Handler Clause"
@@ -154,7 +158,7 @@ mkPOp :: String -> [String] -> CPat
 mkPOp op = go id
   where
     go f [x3, x4] = POp op (f []) x3 x4
-    go f (x:xs') = go (f . (x :)) xs'
+    go f (x : xs') = go (f . (x :)) xs'
     go _ _ = error "Impossible"
 
 pMClause :: Parser (Pat, Expr)
