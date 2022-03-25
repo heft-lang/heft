@@ -102,7 +102,8 @@ pExpr =
     <|> Con <$> pCon <*> pList1_ng pExpr1
     <|> Op <$> pOp <*> pList1_ng pExpr1
     -- We add a micro step to function application to prefer constructor and operator application
-    <|> foldl1 App <$> pList_ng (pExpr1 `micro` 1)
+    -- over normal application
+    <|> foldl1 App <$> ((:) <$> pExpr1 <*> pList_ng (pExpr1 `micro` 1))
   where
     -- This parser is split into two parts. Above are cases that must be surrounded by parentheses
     -- unless they occur at the top level. Below are cases that never have to be parenthesized.
