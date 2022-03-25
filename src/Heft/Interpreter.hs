@@ -273,10 +273,10 @@ contract (PROp f vs) c = let x = freshC c "x" in case unwind c f vs x (Run (Var 
       Nothing -> unwind c f vs x (Handle cases (V vp) e)
       Just (xsv, xp, xk, e') ->
         let q = freshE e "q" in
-        Just ( foldr (\ (x,v) e -> subst e (V v) x)
+        Just ( foldr (\ (y,v) e -> subst e (V v) y)
                      (subst (subst e' (V vp) xp)
-                            (Lam x
-                               (Lam q
+                            (Lam q
+                               (Lam x
                                   (Handle cases (Var q) e)))
                             xk)
                      (zip xsv vs)
