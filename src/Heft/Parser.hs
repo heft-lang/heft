@@ -13,13 +13,11 @@ import Text.ParserCombinators.UU
   ( ExtAlternative (opt, (<?>)),
     P,
     micro,
-    pChainl_ng,
     pEnd,
     pList,
     pList1,
-    pList1Sep,
     pList_ng,
-    parse_h, pState, HasPosition (getPos), parse
+    parse_h, IsParser, parse
   )
 import Text.ParserCombinators.UU.BasicInstances
   ( Error (Deleted, DeletedAtEnd, Inserted, Replaced),
@@ -48,15 +46,18 @@ lexeme p = p <* ignore
 
 ignore :: Parser ()
 ignore =
-  () <$ pList1 ((pToken "--" *> pMunch (/= '\n') <?> "Line Comment") <|> pSatisfy isSpace (Insertion "space" ' ' 5) *> pMunch isSpace)
+  () <$ pList1 ((pToken "--" *> pMunch (/= '\n') <?> "Line Comment") <|> pSatisfy isSpace (Insertion "Space" ' ' 5) *> pMunch isSpace)
     `opt` ()
 
 pKey :: String -> Parser String
-pKey k = lexeme $ pToken k `micro` 1
+pKey k = lexeme $ pToken k
 
 -- | The lower-level interface. Returns all errors.
 execParser :: Parser a -> String -> (a, [Error LineColPos])
 execParser p = parse_h ((,) <$ ignore <*> p <*> pEnd) . createStr (LineColPos 0 0 0)
+
+onlineParser :: Parser a -> String -> (a, [Error LineColPos])
+onlineParser p = parse ((,) <$ ignore <*> p <*> pEnd) . createStr (LineColPos 0 0 0)
 
 -- | The higher-level interface. (Calls 'error' with a simplified error).
 --   Runs the parser; if the complete input is accepted without problems  return the
@@ -92,35 +93,11 @@ runParser inputName p str
         belowString = replicate 30 ' ' ++ "^"
         inputFrag = replicate (30 - pos) ' ' ++ take 71 (drop (pos - 30) s')
 
---------------------------------------------------------------------------------
--- Hof
---------------------------------------------------------------------------------
-
--- data Hof
---   = App Hof Hof
---   | Let String {- = -} Hof {- in -} Hof
---   | Handle [HClause]
---   | Enact Hof
---   | Var String
---   | Abs String {- -> -} Hof
---   | Con String
---   | Susp Hof
---   | Match Hof {- with -} [MClause]
---   deriving (Show)
---
--- data HClause
---   = Op String [String] String String {- = -} Hof
---   | Ret String String {- = -} Hof
---   deriving (Show)
---
--- data MClause = Case String [String] {- = -} Hof
---   deriving (Show)
-
 -- Tokens
 
-pCon, pVar, pLam, pArr, pEq, pIn, pLet, pHandle, pReturn, pComma, pMatch, pWith, pPipe, pBang, pLBrace, pRBrace, pLParen, pRParen :: Parser String
-pCon = lexeme $ (:) <$> pUpper <*> pMunch isAlphaNum `micro` 2 <?> "Constructor"
-pVar = lexeme $ (:) <$> pLower <*> pMunch isAlphaNum `micro` 2 <?> "Variable"
+pCon, pVar, pLam, pArr, pEq, pIn, pLet, pHandle, pReturn, pMatch, pPipe, pBang, pLBrace, pRBrace, pLParen, pRParen :: Parser String
+pCon = lexeme $ ((:) <$> pUpper <*> pMunch isAlphaNum) <?> "Constructor"
+pVar = lexeme $ ((:) <$> pLower <*> pMunch isAlphaNum) `micro` 1 <?> "Variable"
 pLam = pKey "λ" <|> pKey "\\"
 pArr = pKey "->"
 pEq = pKey "="
@@ -128,9 +105,7 @@ pIn = pKey "in"
 pLet = pKey "let"
 pHandle = pKey "handle"
 pReturn = pKey "return"
-pComma = pKey ","
 pMatch = pKey "match"
-pWith = pKey "with"
 pPipe = pKey "|"
 pBang = pKey "!"
 pLBrace = pKey "{"
@@ -147,32 +122,43 @@ pExpr =
   asum
     [ Lam <$ pLam <*> pVar <* pArr <*> pExpr <?> "Lambda",
       Letrec <$ pLet <*> pVar <* pEq <*> pExpr <* pIn <*> pExpr <?> "Let",
-      pChainl_ng (pure App) (((Run <$> pExprL <* pBang <?> "Enact") <|> pExprL) `micro` 1)
+      Handle <$ pHandle <*> pBraces (pList pHClause) <*> pExpr1 <*> pExpr1 <?> "Handle",
+      Match <$ pMatch <*> pExpr <*> pBraces (pList pMClause) <?> "Match",
+      Con <$> pCon <*> pList_ng pExpr1,
+      foldl1 App <$> pList_ng (pExpr1 `micro` 1)
     ]
   where
-    pExprL :: Parser Expr
-    pExprL =
+    pExpr1 :: Parser Expr
+    pExpr1 = foldr (const Run) <$>
       asum
         [ Susp <$> pBraces pExpr <?> "Suspension",
-          Con <$> pCon <*> pList_ng pExprL,
+          Con <$> pCon <*> pure [] `micro` 1,
           Var <$> pVar,
-          Handle <$ pHandle <*> pBraces (pList1Sep pComma pHClause) <*> pExprL <*> pExprL <?> "Handle",
-          Match <$ pMatch <*> pExpr <* pWith <*> pBraces (pList pMClause) <?> "Match",
           pParens pExpr <?> "Parens"
-        ]
+        ] <*> pList pBang
 
 pHClause :: Parser (CPat, Expr)
-pHClause = (,) <$> pCPat <* pEq <*> pExpr
+pHClause = (,) <$ pPipe <*> pCPat <* pArr <*> pExpr <?> "Handler Clause"
 
 pCPat :: Parser CPat
 pCPat =
   asum
     [ PRet <$ pReturn <*> pVar <*> pVar <?> "Return Clause",
-      POp <$> pVar <*> pList pVar <*> pVar <*> pVar <?> "Operator Clause"
+      mkPOp <$> pVar <*> pList2 pVar <?> "Operator Clause"
     ]
 
+pList2 :: IsParser p => p a -> p [a]
+pList2 p = (:) <$> p <*> pList1 p
+
+mkPOp :: String -> [String] -> CPat
+mkPOp op = go id
+  where
+    go f [x3, x4] = POp op (f []) x3 x4
+    go f (x:xs') = go (f . (x :)) xs'
+    go _ _ = error "Impossible"
+
 pMClause :: Parser (Pat, Expr)
-pMClause = (,) <$ pPipe <*> pPat <* pArr <*> pExpr <?> "Case"
+pMClause = (,) <$ pPipe <*> pPat <* pArr <*> pExpr <?> "Match Case"
 
 pPat :: Parser Pat
 pPat =
