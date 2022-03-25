@@ -1,41 +1,18 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Heft.Parser where
 
-import Control.Applicative (Alternative ((<|>)))
 import Data.Char (isAlphaNum, isSpace)
-import Data.Foldable (asum)
+import Data.String (IsString (..))
 import Heft.AST
-import Text.ParserCombinators.UU
-  ( ExtAlternative (opt, (<?>)),
-    IsParser,
-    P,
-    micro,
-    pEnd,
-    pList,
-    pList1,
-    pList_ng,
-    parse_h, pList1_ng
-  )
-import Text.ParserCombinators.UU.BasicInstances
-  ( Error (Deleted, DeletedAtEnd, Inserted, Replaced),
-    Insertion (Insertion),
-    LineColPos (LineColPos),
-    Str,
-    createStr,
-    pMunch,
-    pSatisfy,
-    pSym,
-    pToken,
-    show_expecting,
-  )
-import Text.ParserCombinators.UU.Utils
-  ( pLower,
-    pUpper,
-  )
+import Text.ParserCombinators.UU hiding (pReturn)
+import Text.ParserCombinators.UU.BasicInstances hiding (Parser)
 
 --------------------------------------------------------------------------------
 -- ParseUtils
@@ -44,19 +21,24 @@ import Text.ParserCombinators.UU.Utils
 type Parser a = P (Str Char String LineColPos) a
 
 lexeme :: Parser a -> Parser a
-lexeme p = p <* ignore
+lexeme p = p <* whitespace
 
-ignore :: Parser ()
-ignore =
+-- Here we specify that our language uses Haskell-like '--' syntax for line comments
+whitespace :: Parser ()
+whitespace =
   () <$ pList1 ((pToken "--" *> pMunch (/= '\n') <?> "Line Comment") <|> pSatisfy isSpace (Insertion "Space" ' ' 5) *> pMunch isSpace)
     `opt` ()
 
-pKey :: String -> Parser String
-pKey k = lexeme $ pToken k
+-- We define an instance of IsString so that we can write literal strings to mean parsers that parse exactly those literal strings.
+instance (a ~ String) => IsString (Parser a) where
+  fromString = lexeme . pToken
+
+pList2 :: IsParser p => p a -> p [a]
+pList2 p = (:) <$> p <*> pList1 p
 
 -- | The lower-level interface. Returns all errors.
 execParser :: Parser a -> String -> (a, [Error LineColPos])
-execParser p = parse_h ((,) <$ ignore <*> p <*> pEnd) . createStr (LineColPos 0 0 0)
+execParser p = parse_h ((,) <$ whitespace <*> p <*> pEnd) . createStr (LineColPos 0 0 0)
 
 -- | The higher-level interface. (Calls 'error' with a simplified error).
 --   Runs the parser; if the complete input is accepted without problems  return the
@@ -92,87 +74,77 @@ runParser inputName p str
         belowString = replicate 30 ' ' ++ "^"
         inputFrag = replicate (30 - pos) ' ' ++ take 71 (drop (pos - 30) s')
 
--- Tokens
-
-pCon, pVar, pLam, pArr, pEq, pIn, pLet, pHandle, pReturn, pMatch, pPipe, pBang, pLBrace, pRBrace, pLParen, pRParen, pOp :: Parser String
-pCon = lexeme $ ((:) <$> pUpper <*> pMunch isAlphaNum) <?> "Constructor"
-pVar = lexeme $ ((:) <$> pLower <*> pMunch isAlphaNum) `micro` 1 <?> "Variable"
-pLam = pKey "λ" <|> pKey "\\"
-pArr = pKey "->"
-pEq = pKey "="
-pIn = pKey "in"
-pLet = pKey "let"
-pHandle = pKey "handle"
-pReturn = pKey "return"
-pMatch = pKey "match"
-pPipe = pKey "|"
-pBang = pKey "!"
-pLBrace = pKey "{"
-pRBrace = pKey "}"
-pLParen = pKey "("
-pRParen = pKey ")"
-pOp = lexeme $ (:) <$ pSym '`' <*> pLower <*> pMunch isAlphaNum <?> "Operator"
+pCon, pVar, pLam, pOp :: Parser String
+pCon = lexeme $ ((:) <$> pRange ('A', 'Z') <*> pMunch isAlphaNum) <?> "Constructor"
+pVar =
+  lexeme $
+    ((:) <$> (pRange ('a', 'z') <|> pSym '_') <*> pMunch (\c -> c == '_' || c == '\'' || isAlphaNum c))
+-- We add a micro step to variables to disambiguate keywords. This extra micro step means 
+-- that the parser prefers other options (such as keywords) in case of ambiguity
+      `micro` 1
+      <?> "Variable"
+pOp = lexeme $ (:) <$ pSym '`' <*> pRange ('a', 'z') <*> pMunch isAlphaNum <?> "Operator"
+pLam = "λ" <|> "\\"
 
 pBraces, pParens :: Parser a -> Parser a
-pBraces p = pLBrace *> p <* pRBrace
-pParens p = pLParen *> p <* pRParen
+pBraces p = "{" *> p <* "}"
+pParens p = "(" *> p <* ")"
 
 pExpr :: Parser Expr
 pExpr =
-  asum
-    [ Lam <$ pLam <*> pVar <* pArr <*> pExpr <?> "Lambda",
-      Letrec <$ pLet <*> pVar <* pEq <*> pExpr <* pIn <*> pExpr <?> "Let",
-      Handle <$ pHandle <*> pBraces (pList pHClause) <*> pExpr1 <*> pExpr1 <?> "Handle",
-      Match <$ pMatch <*> pExpr <*> pBraces (pList pMClause) <?> "Match",
-      Con <$> pCon <*> pList1_ng pExpr1,
-      Op <$> pOp <*> pList1_ng pExpr1,
-      foldl1 App <$> pList_ng (pExpr1 `micro` 1)
-    ]
+  (Lam <$ pLam <*> pVar <* "->" <*> pExpr <?> "Lambda")
+    <|> (Letrec <$ "let" <*> pVar <* "=" <*> pExpr <* "in" <*> pExpr <?> "Let")
+    <|> (Handle <$ "handle" <*> pBraces (pList pHClause) <*> pExpr1 <*> pExpr1 <?> "Handle")
+    <|> (Match <$ "match" <*> pExpr <*> pBraces (pList pMClause) <?> "Match")
+    -- We make the constructor, operator, and normal application non-greedy (ng), 
+    -- because it should stop if it encounters other syntax such as the 'in' part
+    -- of a 'let ... in ...' expression or the brackets of a 'match ... { ... }' expression.
+    <|> Con <$> pCon <*> pList1_ng pExpr1
+    <|> Op <$> pOp <*> pList1_ng pExpr1
+    -- We add a micro step to function application to prefer constructor and operator application
+    <|> foldl1 App <$> pList_ng (pExpr1 `micro` 1)
   where
+    -- This parser is split into two parts. Above are cases that must be surrounded by parentheses
+    -- unless they occur at the top level. Below are cases that never have to be parenthesized.
     pExpr1 :: Parser Expr
     pExpr1 =
+      -- This fold maps over the Maybe type, so it is either applied once or not at all.
       foldr (const Run)
-        <$> asum
-          [ Susp <$> pBraces pExpr <?> "Suspension",
-            Var <$> pVar,
-            Con <$> pCon <*> pure [],
-            Op <$> pOp <*> pure [],
-            pParens pExpr <?> "Parens"
-          ]
-          <*> pList pBang
+        <$> ( (Susp <$> pBraces pExpr <?> "Suspension")
+                <|> Var <$> pVar
+                -- Constructors and operators are duplicated here, because they do not have to be
+                -- parenthesized if they are not applied to any arguments.
+                <|> Con <$> pCon <*> pure []
+                <|> Op <$> pOp <*> pure []
+                <|> (pParens pExpr <?> "Parens")
+            )
+          <*> pMaybe "!"
 
+-- Handler clauses
 pHClause :: Parser (CPat, Expr)
-pHClause = (,) <$ pPipe <*> pCPat <* pArr <*> pExpr <?> "Handler Clause"
+pHClause = (,) <$ "|" <*> pCPat <* "->" <*> pExpr <?> "Handler Clause"
 
+-- Handler clause patterns
 pCPat :: Parser CPat
 pCPat =
-  asum
-    [ PRet <$ pReturn <*> pVar <*> pVar <?> "Return Clause",
-      mkPOp <$> pVar <*> pList2 pVar <?> "Operator Clause"
-    ]
+  (PRet <$ "return" <*> pVar <*> pVar <?> "Return Clause")
+    <|> (mkPOp <$> pVar <*> pList2 pVar <?> "Operator Clause")
 
-pList2 :: IsParser p => p a -> p [a]
-pList2 p = (:) <$> p <*> pList1 p
-
+-- | Transforms a name and a list of at least two elements into an operator pattern
 mkPOp :: String -> [String] -> CPat
 mkPOp op = go id
   where
     go f [x3, x4] = POp op (f []) x3 x4
     go f (x : xs') = go (f . (x :)) xs'
-    go _ _ = error "Impossible"
+    go _ _ = error "Operator patterns should be given at least two parameters"
 
+-- Match clauses
 pMClause :: Parser (Pat, Expr)
-pMClause = (,) <$ pPipe <*> pPat <* pArr <*> pExpr <?> "Match Case"
+pMClause = (,) <$ "|" <*> pPat <* "->" <*> pExpr <?> "Match Case"
 
+-- Match patterns
 pPat :: Parser Pat
-pPat =
-  asum
-    [ PCon <$> pCon <*> pList pPatL <?> "Constructor Pattern",
-      pPatL
-    ]
+pPat = (PCon <$> pCon <*> pList pPat1 <?> "Constructor Pattern") <|> pPat1
   where
-    pPatL =
-      asum
-        [ PVar <$> pVar <?> "Variable Pattern",
-          pParens pPat
-        ]
+    -- Here we again split the parser into two parts, see the explanation of this in 'pExpr'
+    pPat1 = (PVar <$> pVar <?> "Variable Pattern") <|> pParens pPat
