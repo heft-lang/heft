@@ -1,8 +1,8 @@
 module Main where
 
-import Heft.Parser
-import Heft.Interpreter
-import System.Environment
+import Heft.Parser ( pExpr, runParser )
+import Heft.Interpreter ( eval )
+import System.Environment ( getArgs )
 
 main :: IO ()
 main = do

@@ -1,12 +1,12 @@
 let add = \x -> \y -> 
-  match x with {
+  match x {
   | S z -> S (add z y)
   | Z -> y } in
 let fib = \x ->
-  match x with {
+  match x {
   | S y -> 
-    match y with {
+    match y {
     | S z -> add (fib y) (fib z)
     | Z -> x }
   | Z -> x } in
-fib (S (S (S (S Z))))
+fib (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S Z)))))))))))))))))))
