@@ -6,7 +6,7 @@ import Debug.Trace
 {- Contexts
 
 E ::= E e | v E | E!
-    | handle { case* } v e | handle { cases } v E
+    | handle' { case* } v e | handle' { cases } v E
     | op f (E...e) | ... | op f (v...E)
     | ho f (E...e) es | ... | ho f (v...E) es | ho f vs (E...e) | ho f vs (v...E)
 
@@ -55,7 +55,7 @@ there are no closer handlers that match f in E
 (op f xs p k = e) ∈ cases
 ----------------------------------------------------------------------------
 handle' { cases } vp E[ op f vs ]
-  |-> e[ xs/vs , p/vp , k/(λ y q . handle' { cases } q E[y!]) ]
+  |-> e[ xs/vs , p/vp , k/(λ q y . handle' { cases } q E[y!]) ]
 
 -}
 
