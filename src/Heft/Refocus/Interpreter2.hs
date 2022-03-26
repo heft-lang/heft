@@ -7,7 +7,7 @@ import Heft.AST
 {- Contexts
 
 E ::= E e | v E | E!
-    | handle cases with E in e | handle cases with v in E
+    | handle' { case* } v e | handle' { cases } v E
     | op f (E...e) | ... | op f (v...E)
     | ho f (E...e) es | ... | ho f (v...E) es | ho f vs (E...e) | ho f vs (v...E)
 
@@ -22,6 +22,7 @@ data Ctx
   | CtxMatch Ctx [(Pat,Expr)]
   | CtxHandle0 [(CPat, Expr)] Ctx Expr
   | CtxHandle1 [(CPat, Expr)] Val Ctx
+  | CtxLetrec String Ctx Expr
   | CtxOp0 Name [Val] Ctx [Expr]
   | CtxBOp0 Ctx BinOp Expr
   | CtxBOp1 Val BinOp Ctx
@@ -41,19 +42,22 @@ E[ e ] --> E[ e' ]
 (lam x e) v |-> e[x/v]
 
 
-letrec x = e1 in e2 |-> e2[ x/e[ x/(letrec x = e1 in e2) ] ]
+letrec x = e1 in e2 |-> e2[ x/e1[ x/(letrec x = e1 in x) ] ]
+
+
+handle { cases } ep e |-> { handle' { cases } ep e }
 
 
 (return x p = e) ∈ cases
 --------------------------------------------
-handle cases with vp in v |-> e[ x/v, p/vp ]
+handle' { cases } vp v |-> e[ x/v, p/vp ]
 
 
 there are no closer handlers that match f in E
 (op f xs p k = e) ∈ cases
 ----------------------------------------------------------------------------
-handle cases with vp in E[ op f vsv ]
-  |-> e[ xs/vsv , p/vp , k/(λ y q . handle cases with q in E[y!]) ]
+handle' { cases } vp E[ op f vs ]
+  |-> e[ xs/vs , p/vp , k/(λ q y . handle' { cases } q E[y!]) ]
 
 -}
 
@@ -69,7 +73,7 @@ data PR
   | PRMatch Name [Val] [(Pat, Expr)]
   | PRRet [(CPat,Expr)] Val Val
   | PROp Name [Val]
-  | PRLetrec String Expr Expr
+  | PRLetrec String Val Expr
   | PRBOp Val BinOp Val
 
 
@@ -101,6 +105,11 @@ subst (Handle cases e1 e2) v x = Handle (map (\ (p,e) ->
                                                 else (p, subst e v x)) cases)
                                         (subst e1 v x)
                                         (subst e2 v x)
+subst (Handle' cases e1 e2) v x = Handle' (map (\ (p,e) ->
+                                                  if elem x (bindingsOfCPat p) then (p, e)
+                                                  else (p, subst e v x)) cases)
+                                          (subst e1 v x)
+                                          (subst e2 v x)
 subst (Op f evs) v x = Op f (map (\ e -> subst e v x) evs)
 subst (Letrec y e1 e2) v x | x == y = Letrec y e1 e2
                            | otherwise = Letrec y (subst e1 v x) (subst e2 v x)
@@ -129,6 +138,7 @@ freshC (CtxHandle1 cases _ c) x = freshC c (foldr (\ (p, e) x -> if (elem x (bin
 freshC (CtxOp0 _ _ c es) x = freshC c (foldr freshE x es)
 freshC (CtxBOp0 c _ e1) x = freshC c (freshE e1 x)
 freshC (CtxBOp1 _ _ c) x = freshC c x
+freshC (CtxLetrec y c _) x = freshC c $ if y == x then ("." ++ x) else x
 
 
 freshE :: Expr -> String -> String
@@ -150,6 +160,10 @@ freshE (Handle cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p
                                                     else freshE e x)
                                      (freshE e (freshE ep x))
                                      cases
+freshE (Handle' cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p)) then freshE e ("." ++ x)
+                                                     else freshE e x)
+                                      (freshE e (freshE ep x))
+                                      cases
 freshE (Op _ esv) x = foldr freshE x esv
 freshE (Letrec y e1 e2) x | x == y = freshE e2 (freshE e1 ("." ++ x))
                           | otherwise = freshE e2 (freshE e1 x)
@@ -173,11 +187,12 @@ eval (Con f es) c = case es of
   []     -> cont c (VCon f [])
   (e:es) -> eval e (CtxCon f [] c es)
 eval (Match e pes) c = eval e (CtxMatch c pes)
-eval (Handle cases ep e) c = eval ep (CtxHandle0 cases c e)
+eval (Handle cases ep e) c = cont c (VSusp $ Handle' cases ep e)
+eval (Handle' cases ep e) c = eval ep (CtxHandle0 cases c e)
 eval (Op f esv) c = case esv of
   []     -> let x = freshC c "x" in unwind c f [] x (Run (Var x))
   (e:es) -> eval e (CtxOp0 f [] c es)
-eval (Letrec x e1 e2) c = eval (subst e2 (subst e1 (Letrec x e1 (Var x)) x) x) c
+eval (Letrec x e1 e2) c = eval e1 (CtxLetrec x c e2)
 eval (BOp e1 bop e2) c = eval e1 (CtxBOp0 c bop e2)
 
 
@@ -236,6 +251,12 @@ cont (CtxBOp1 v1 bop c)      v  = case bop of
   Minus -> case (v1, v) of
     (VNum i1, VNum i2) -> cont c (VNum (i1 - i2))
     p -> error $ "Bad minus expression. Expected sub-expressions to yield numbers, but got: " ++ show p
+cont (CtxLetrec x c e2)      v  = case v of
+  VLam y e -> let e' = subst e (Letrec x (V v) (Var x)) x in
+    eval (subst e2 (V $ VLam y e') x) c
+  VSusp e -> let e' = subst e (Letrec x (V v) (Var x)) x in
+    eval (subst e2 (V $ VSusp e') x) c
+  v -> eval (subst e2 (V v) x) c
 
 
 -- helpers
@@ -247,22 +268,23 @@ unwind (CtxApp1 v c) f vs x e = unwind c f vs x (App (V v) e)
 unwind (CtxRun c) f vs x e = unwind c f vs x (Run e)
 unwind (CtxCon g ws c es) f vs x e = unwind c f vs x (Con g (map V ws ++ e:es))
 unwind (CtxMatch c pes) f vs x e = unwind c f vs x (Match e pes)
-unwind (CtxHandle0 cases c e1) f vs x e = unwind c f vs x (Handle cases e e1)
+unwind (CtxHandle0 cases c e1) f vs x e = unwind c f vs x (Handle' cases e e1)
 unwind (CtxHandle1 cases vp c) f vs x e = case matchOp f vs cases of
-  Nothing -> unwind c f vs x (Handle cases (V vp) e)
+  Nothing -> unwind c f vs x (Handle' cases (V vp) e)
   Just (xsv, xp, xk, e') ->
     let q = freshE e "q" in
     eval ( foldr (\ (x,v) e -> subst e (V v) x)
                  (subst (subst e' (V vp) xp)
-                        (Lam x
-                           (Lam q
-                              (Handle cases (Var q) e)))
+                        (Lam q
+                           (Lam x
+                              (Handle' cases (Var q) e)))
                         xk)
                  (zip xsv vs) )
          c
 unwind (CtxOp0 g ws c es) f vs x e = unwind c f vs x (Op g (map V ws ++ e:es))
 unwind (CtxBOp0 c bop e2) f vs x e = unwind c f vs x (BOp e bop e2)
 unwind (CtxBOp1 v1 bop c) f vs x e = unwind c f vs x (BOp (V v1) bop e)
+unwind (CtxLetrec y c e2) f vs x e = unwind c f vs x (Letrec y e e2)
 
 matchOp :: String -> [Val] -> [(CPat, Expr)] -> Maybe ([String], String, String, Expr)
 matchOp f vsv ((POp g xsv xp xk, e):cases)
