@@ -108,10 +108,10 @@ fixApply s x = foldl App (mapSubExpr (fixApply []) x) s
 
 mapValExpr :: (Expr -> Expr) -> Val -> Val
 mapValExpr f = \case
-  (VLam s ex) -> VLam s (f ex)
-  (VSusp ex) -> VSusp (f ex)
-  (VNum n) -> VNum n
-  (VCon s vals) -> VCon s (map (mapValExpr f) vals)
+  VLam s ex -> VLam s (f ex)
+  VSusp ex -> VSusp (f ex)
+  VNum n -> VNum n
+  VCon s vals -> VCon s (map (mapValExpr f) vals)
 
 mapSubExpr :: (Expr -> Expr) -> Expr -> Expr
 mapSubExpr f = \case
@@ -129,6 +129,7 @@ mapSubExpr f = \case
   Con s exs -> Con s (map f exs)
   Match ex x0 -> Match (f ex) (map (second f) x0)
   Handle x0 ex ex' -> Handle (map (second f) x0) (f ex) (f ex')
+  Handle' x0 ex ex' -> Handle' (map (second f) x0) (f ex) (f ex')
   Op s exs -> Op s (map f exs)
   Letrec s ex ex' -> Letrec s (f ex) (f ex')
   BOp ex bo ex' -> BOp (f ex) bo (f ex')
