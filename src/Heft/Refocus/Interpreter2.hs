@@ -281,19 +281,19 @@ unwind (CtxHandle1 cases vp c) f vs x e = case matchOp f vs cases of
                         xk)
                  (zip xsv vs) )
          c
+  where
+    matchOp :: String -> [Val] -> [(CPat, Expr)] -> Maybe ([String], String, String, Expr)
+    matchOp f vsv ((POp g xsv xp xk, e):cases)
+      | f == g && length vsv == length xsv
+        = Just (xsv, xp, xk, e)
+      | otherwise
+        = matchOp f vsv cases
+    matchOp f vsv (_:cases) = matchOp f vsv cases
+    matchOp _ _ _ = Nothing
 unwind (CtxOp0 g ws c es) f vs x e = unwind c f vs x (Op g (map V ws ++ e:es))
 unwind (CtxBOp0 c bop e2) f vs x e = unwind c f vs x (BOp e bop e2)
 unwind (CtxBOp1 v1 bop c) f vs x e = unwind c f vs x (BOp (V v1) bop e)
 unwind (CtxLetrec y c e2) f vs x e = unwind c f vs x (Letrec y e e2)
-
-matchOp :: String -> [Val] -> [(CPat, Expr)] -> Maybe ([String], String, String, Expr)
-matchOp f vsv ((POp g xsv xp xk, e):cases)
-  | f == g && length vsv == length xsv
-    = Just (xsv, xp, xk, e)
-  | otherwise
-    = matchOp f vsv cases
-matchOp f vsv (_:cases) = matchOp f vsv cases
-matchOp _ _ _ = Nothing
 
 
 -- run
