@@ -76,8 +76,8 @@ runParser inputName p str
         inputFrag = replicate (30 - pos) ' ' ++ take 71 (drop (pos - 30) s')
 
 pCon, pOp :: Parser String
-pCon = lexeme $ ((:) <$> pRange ('A', 'Z') <*> pMunch isAlphaNum) <?> "Constructor"
-pOp = lexeme $ (:) <$ pSym '`' <*> pRange ('a', 'z') <*> pMunch isAlphaNum <?> "Operation"
+pCon = lexeme $ ((:) <$> pRange ('A', 'Z') <*> pMunch (\c -> isAlphaNum c || c == '_' || c == '\'')) <?> "Constructor"
+pOp = lexeme $ (:) <$ pSym '`' <*> pRange ('a', 'z') <*> pMunch (\c -> isAlphaNum c || c == '_' || c == '\'') <?> "Operation"
 
 keywords :: [String]
 keywords = ["let", "in", "match", "return"]
@@ -87,8 +87,8 @@ pVar = lexeme $ pSymExt splitState (Succ Zero) Nothing <?> "Variable"
   where
     splitState :: (String -> Str Char String LineColPos -> Steps a) -> Str Char String LineColPos -> Steps a
     splitState k inp@(Str (x : xs) msgs pos del_ok)
-      | isLower x
-        , (l, r) <- span isAlphaNum xs
+      | isLower x || x == '_'
+        , (l, r) <- span (\c -> isAlphaNum c || c == '_' || c == '\'') xs
         , x : l `notElem` keywords =
         Step (length (x : l)) (k (x : l) (Str r msgs (advance pos (x : l)) del_ok))
     splitState k inp@(Str tts msgs pos del_ok) =
