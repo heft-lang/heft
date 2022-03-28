@@ -7,7 +7,7 @@ let hCatch = \ prog ->
       | Just x -> x
       }
     }
-  | return x _ -> x
+  | return x _ -> Just x
   } Z prog! in
 let hCatch2 = \ prog ->
   handle {
@@ -19,13 +19,13 @@ let hCatch2 = \ prog ->
       }
     }
   | abort m p k -> m!
-  | return x _ -> x
+  | return x _ -> Just x
   } Z prog! in
 let hState = \ s0 -> \ prog ->
   handle {
   | get    s k -> k s { s }
   | put s' s k -> k s' { Z }
-  | return x s -> x
+  | return x s -> Pair x s
   } s0 prog! in
 let transact = {
   let _ = `put (S Z) in
