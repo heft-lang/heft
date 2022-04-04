@@ -296,7 +296,7 @@ contract (PROp f vs) c = let x = freshC c "x" in case unwind c f vs x (Run (Var 
                      (subst (subst e' (V vp) xp)
                             (Lam q
                                (Lam x
-                                  (Handle' cases (Var q) e)))
+                                  (Susp (Handle' cases (Var q) e))))
                             xk)
                      (zip xsv vs)
              , c )
