@@ -1,30 +1,30 @@
 let hCatch = \ prog ->
   handle {
   | throw p k -> Nothing
-  | catch m1 m2 p k -> k p {
+  | catch m1 m2 p k -> (k p {
       match (hCatch m1)! {
       | Nothing -> m2!
       | Just x -> x
       }
-    }
+    })!
   | return x _ -> Just x
   } Z prog! in
 let hCatch2 = \ prog ->
   handle {
   | throw p k -> Nothing
-  | catch m1 m2 p k -> k p {
+  | catch m1 m2 p k -> (k p {
       match (hCatch2 m1)! {
-      | Nothing -> `abort { k p m2 }
+      | Nothing -> `abort (k p m2)
       | Just x -> x
       }
-    }
+    })!
   | abort m p k -> m!
   | return x _ -> Just x
   } Z prog! in
 let hState = \ s0 -> \ prog ->
   handle {
-  | get    s k -> k s { s }
-  | put s' s k -> k s' { Z }
+  | get    s k -> (k s { s })!
+  | put s' s k -> (k s' { Z })!
   | return x s -> Pair x s
   } s0 prog! in
 let transact = {
