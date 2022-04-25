@@ -64,26 +64,26 @@ instance TypeSyntax a => TypeSyntax (Env a) where
 
 instance TypeSyntax Type where
 
-  ftv (FunT t u) = ftv t <> ftv u
-  ftv (AppT t u) = ftv t <> ftv u
-  ftv (SusT t r) = ftv t <> ftv r
-  ftv NumT       = mempty
-  ftv BoolT      = mempty 
-  ftv (VarT x  ) = Set.singleton x
+  ftv (FunT t u)         = ftv t <> ftv u
+  ftv (AppT t u)         = ftv t <> ftv u
+  ftv (SusT t (r1 , r2)) = ftv t <> ftv r1 <> ftv r2
+  ftv NumT               = mempty
+  ftv BoolT              = mempty 
+  ftv (VarT x  )         = Set.singleton x
   
-  frv (FunT t u) = frv t <> frv u
-  frv (AppT t u) = frv t <> frv u
-  frv (SusT t r) = frv t <> frv r
-  frv NumT       = mempty
-  frv BoolT      = mempty 
-  frv (VarT _  ) = mempty 
+  frv (FunT t u)         = frv t <> frv u
+  frv (AppT t u)         = frv t <> frv u
+  frv (SusT t (r1 , r2)) = frv t <> frv r1 <> frv r2
+  frv NumT               = mempty
+  frv BoolT              = mempty 
+  frv (VarT _  )         = mempty 
   
-  apply s   (FunT t u) = FunT (apply s t) (apply s u)
-  apply s   (AppT t u) = AppT (apply s t) (apply s u)
-  apply s   (SusT t r) = SusT (apply s t) (apply s r)
-  apply _   NumT       = NumT
-  apply _   BoolT      = BoolT 
-  apply s t@(VarT x  ) = maybe t id (Map.lookup x (entries $ typeSubstitutions s)) 
+  apply s   (FunT t u)         = FunT (apply s t) (apply s u)
+  apply s   (AppT t u)         = AppT (apply s t) (apply s u)
+  apply s   (SusT t (r1 , r2)) = SusT (apply s t) (apply s r1 , apply s r2) 
+  apply _   NumT               = NumT
+  apply _   BoolT              = BoolT 
+  apply s t@(VarT x  )         = maybe t id (Map.lookup x (entries $ typeSubstitutions s)) 
 
 
 instance TypeSyntax Row where
@@ -126,22 +126,22 @@ numSubscript = map ((!!) nums . read . (flip (:) $ [])) . show
                , '₉'
                ] 
 
-rownames :: [String] -> [String]
-rownames rs =
+rownames :: Char -> [String] -> [String]
+rownames base rs =
   if
     length rs == 1
   then
-    ["ρ"]
+    [[base]]
   else
-    map ((:) 'ρ' . numSubscript) (take (length rs) [0..]) 
+    map ((:) base . numSubscript) (take (length rs) [0..]) 
   
 -- Normalize a scheme w.r.t. alpha equivalence
 normalizeAlpha :: Scheme -> Scheme
 normalizeAlpha (Scheme ts rs t) =
-   Scheme nts (rownames rs)
+   Scheme nts (rownames 'ρ' rs)
     (apply (Substitution
       (Env $ Map.fromList (zipWith (,) ts (map VarT nts)))
-      (Env $ Map.fromList (zipWith (,) rs (map VarR (rownames rs))))
+      (Env $ Map.fromList (zipWith (,) rs (map VarR (rownames 'ρ' rs))))
     ) t)
   where nts :: [String]
         nts = take (length ts) (fmap return ['a'..])
@@ -158,4 +158,4 @@ normalizeAnn (r1 , r2) = (s <$$> r1 , s <$$> r2)
           }
 
         rawSubst :: [(Name , Row)]
-        rawSubst = zip (Set.toList $ (frv r1 `Set.union` frv r2)) (VarR <$> rownames (Set.toList $ (frv r1 `Set.union` frv r2)))
+        rawSubst = zip (Set.toList $ (frv r1 `Set.union` frv r2)) (VarR <$> rownames 'ε' (Set.toList $ (frv r1 `Set.union` frv r2)))

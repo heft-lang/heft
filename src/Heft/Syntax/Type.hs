@@ -22,7 +22,7 @@ data Row = NilR
 -- 
 data Type = FunT Type Type
           | AppT Type Type
-          | SusT Type Row
+          | SusT Type (Row , Row)
           | NumT | BoolT 
           | VarT Name
           deriving (Eq)
@@ -66,7 +66,7 @@ instance Show Type where
   show (FunT t@(FunT _ _) u) = "(" <> show t <> ") → " <> show u
   show (FunT t u)            = show t <> " → " <> show u
   show (AppT t u)         = show t <> "(" <> show u  <> ")"
-  show (SusT t r) = "{ " ++ show t ++ " <" ++ show r ++ ">" ++ " }" 
+  show (SusT t (ε , εl)) = "{ " ++ show t ++ " | " ++ show ε ++ " * " ++ show εl ++ " }" 
   show NumT = "ℕ"
   show BoolT = "𝔹" 
 

@@ -40,10 +40,11 @@ instance Unify Type where
     s1 <- unify t t'
     s2 <- unify (s1 <$$> u) (s1 <$$> u')
     return (s2 <> s1)
-  unify (SusT t r) (SusT t' r') = do
+  unify (SusT t (r1 , r2)) (SusT t' (r1' , r2')) = do
     s1 <- unify t t'
-    s2 <- unify (s1 <$$> r) (s1 <$$> r')
-    return (s2 <> s1)
+    s2 <- unify (s1 <$$> r1) (s1 <$$> r1')
+    s3 <- unify ((s2 <> s1) <$$> r2) ((s2 <> s1) <$$> r2')
+    return (s3 <> s2 <> s1)
   unify NumT  NumT  = return mempty
   unify BoolT BoolT = return mempty
   unify t (VarT x) = unifyTypeVar x t

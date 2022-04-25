@@ -71,19 +71,52 @@ tc (App e1 e2) = do
   (s1 , t' , (ε1 , εl1)) <- tc e1
   (s2 , t  , (ε2 , εl2)) <- withEnv (s1<$$>) (tc e2)
   s3                     <- unify (s2 <$$> t') (FunT t u)
-  s4                     <- unify ((s3 <> s2) <$$> ε1) (s3 <$$> ε2)
-  s5                     <- unify ((s4 <> s3 <> s2) <$$> εl1) ((s4 <> s3) <$$> εl2)
+  s4                     <- unify
+                              ((s3 <> s2) <$$> ε1)
+                              (s3         <$$> ε2)
+  s5                     <- unify
+                              ((s4 <> s3 <> s2) <$$> εl1)
+                              ((s4 <> s3)       <$$> εl2)
   conclude
     ( s3 <> s2 <> s1
     , s3 <$$> u
-    , ( (s5 <> s4 <> s3 <> s2) <$$> ε1 , (s5 <> s4 <> s3 <> s2) <$$> εl1)
+    , ( (s5 <> s4 <> s3 <> s2) <$$> ε1
+      , (s5 <> s4 <> s3 <> s2) <$$> εl1
+      )
     )
 
 
-{- 
+
 -- Suspension
-tc (Susp e) = _
-tc (Run e) = _
+tc (Susp e) = do 
+  ε                     <- freshR
+  εl                    <- freshR 
+  (s1 , u , (ε' , εl')) <- tc e 
+  conclude
+    ( s1
+    , SusT u (ε' , εl')
+    , (ε , εl)
+    ) 
+
+tc (Run e) = do
+  t                     <- freshT 
+  ε                     <- freshR
+  εl                    <- freshR 
+  (s1 , u , (ε' , εl')) <- tc e
+  s2                    <- unify (SusT t (ε , εl)) u
+  s3                    <- unify (s2 <$$> ε) (s2 <$$> ε')
+  s4                    <- unify
+                             ((s3 <> s2) <$$> εl)
+                             ((s3 <> s2) <$$> εl')
+  conclude
+    ( s4 <> s3 <> s2 <> s1
+    , t
+    , ( (s4 <> s3 <> s2) <$$> ε
+      , (s4 <> s3 <> s2) <$$> εl
+      )
+    ) 
+
+{- 
 tc (Con x es) = _
 tc (Match e cs) = _ 
 tc (Handle ps ep e) = _
@@ -93,14 +126,18 @@ tc (Op x es) = _
 --TODO effects
 tc (Letrec x e1 e2) = do
   (s1 , t , (ε1 , εl1)) <- tc e1
-  σ                     <- withEnv (s1<$$>) (generalize t)
+  σ                     <- withEnv (s1<$$>) (generalize t) 
   (s2 , u , (ε2 , εl2)) <- withEnv ((s1<$$>) . bindS x σ) (tc e2)
   s3                    <- unify (s2 <$$> ε1) ε2
-  s4                    <- unify ((s3 <> s2) <$$> εl1) (s3 <$$> εl2) 
+  s4                    <- unify
+                             ((s3 <> s2) <$$> εl1)
+                             (s3         <$$> εl2) 
   conclude
     ( s4 <> s3 <> s2 <> s1
     , (s4 <> s3) <$$> u
-    , ( (s4 <> s3 <> s2) <$$> ε1 , (s4 <> s3 <> s2) <$$> εl1 )
+    , ( (s4 <> s3 <> s2) <$$> ε1
+      , (s4 <> s3 <> s2) <$$> εl1
+      )
     ) 
 
 {- 
@@ -132,6 +169,15 @@ expr4  =  Letrec "id" (Lam "x" (App (Var "x") (Var "x")))
 expr5  =  Lam "m" (Letrec "y" (Var "m")
                     (Letrec "x" (App (Var "y") (Num 0))
                           (Var "x")))
+
+expr6  = Susp expr0
+
+expr7  = Run (Susp expr0)
+
+expr8  = Letrec "enact" (Lam "x" (Run (Var "x"))) (Var "enact")
+
+
+expr9  = Letrec "enact" (Lam "x" (Susp (Run (Var "x")))) (Var "enact") 
  
 
 printResult :: Result -> IO ()
@@ -141,5 +187,5 @@ printResult (Right (σ , (ε , εl))) = do
   putStrLn $ "Inferred:\t " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
 
 test :: IO ()
-test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5]
+test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5,expr6,expr7,expr8,expr9]
   where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
