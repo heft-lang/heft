@@ -1,6 +1,6 @@
 module Heft.Interpreter where
 
-import Heft.AST
+import Heft.Syntax.Expr
 import Debug.Trace
 
 {- Contexts
