@@ -23,9 +23,9 @@ emptySubstitution = Substitution
   }
 
 appendSubstitutions :: Substitution -> Substitution -> Substitution
-appendSubstitutions s2 s1 = Substitution
-  { typeSubstitutions = typeSubstitutions s2 <> (apply s2 <$> typeSubstitutions s1)
-  , rowSubstitutions  = rowSubstitutions  s2 <> (apply s2 <$> rowSubstitutions  s1) 
+appendSubstitutions s1 s2 = Substitution
+  { typeSubstitutions = (apply s1 <$> typeSubstitutions s2) <> typeSubstitutions s1
+  , rowSubstitutions  = (apply s1 <$> rowSubstitutions  s2) <> rowSubstitutions  s1
   } 
 
 instance Semigroup Substitution where
@@ -52,6 +52,8 @@ class TypeSyntax a where
   -- Applies a substitution
   apply :: Substitution -> a -> a 
 
+(<$$>) :: TypeSyntax a => Substitution -> a -> a 
+(<$$>) = apply 
 
 -- `Env` can be considered "type syntax", if it's entries are as well
 instance TypeSyntax a => TypeSyntax (Env a) where
@@ -65,16 +67,22 @@ instance TypeSyntax Type where
   ftv (FunT t u) = ftv t <> ftv u
   ftv (AppT t u) = ftv t <> ftv u
   ftv (SusT t r) = ftv t <> ftv r
+  ftv NumT       = mempty
+  ftv BoolT      = mempty 
   ftv (VarT x  ) = Set.singleton x
   
   frv (FunT t u) = frv t <> frv u
   frv (AppT t u) = frv t <> frv u
   frv (SusT t r) = frv t <> frv r
+  frv NumT       = mempty
+  frv BoolT      = mempty 
   frv (VarT _  ) = mempty 
   
   apply s   (FunT t u) = FunT (apply s t) (apply s u)
   apply s   (AppT t u) = AppT (apply s t) (apply s u)
   apply s   (SusT t r) = SusT (apply s t) (apply s r)
+  apply _   NumT       = NumT
+  apply _   BoolT      = BoolT 
   apply s t@(VarT x  ) = maybe t id (Map.lookup x (entries $ typeSubstitutions s)) 
 
 

@@ -1,9 +1,7 @@
-module Core.TC.TCMonad where
+module Heft.TC.TCMonad where
 
-import Debug.Trace
-
-import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.Map as Map 
 
 import Heft.Syntax.Type
 import Heft.TC.Substitution
@@ -12,6 +10,8 @@ import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Reader
 
+import Debug.Trace
+
 data TCState = TCState
   { typevarCount        :: Int
   , rowvarCount         :: Int
@@ -19,7 +19,7 @@ data TCState = TCState
   }
 
 data TCEnv = TCEnv
-  { typeContext       :: Env Type 
+  { typeContext       :: Env Scheme 
   }
 
 emptyEnv :: TCEnv
@@ -29,11 +29,11 @@ emptyEnv = TCEnv
 
 type TC = ReaderT TCEnv (ExceptT String (State TCState))
 
-conclude :: (Substitution , Type) -> TC (Substitution , Type)
-conclude (s , t) =
+conclude :: (Substitution , Type , Row) -> TC (Substitution , Type , Row)
+conclude (s , t , ε) =
   modify (\st ->
     st { inferredConstraints = () {- apply s `Set.map` (inferredConstraints st) -}  })
-  >> return (s , t)
+  >> return (s , t , ε)
 
 freshT :: TC Type
 freshT = do
@@ -75,25 +75,36 @@ freshName x = do
   put (st { typevarCount = typevarCount st + 1 })
   return (x <> "_" <> show (rowvarCount st))
 
+-- Instantiate the quantified type and row variables of a scheme with
+-- fresh variables 
+instantiate :: Scheme -> TC Type
+instantiate σ@(Scheme xs ys t) = do
+  s1 <- mapM (\x -> freshT >>= \fv -> return (x , fv)) xs
+  s2 <- mapM (\x -> freshR >>= \fv -> return (x , fv)) ys 
+  return (apply (Substitution (Env $ Map.fromList s1) (Env $ Map.fromList s2) ) t)
 
--- Only collects free variables from the type environment. What about the
--- row constraints? 
+
+-- Generalize over the free variables in a type 
 generalize :: Type -> TC Scheme
 generalize t = do
   nv <- ask
-  st <- get
-  put (st { inferredConstraints = mempty })
   return $ 
     Scheme
       ( Set.toList $
         Set.difference
-          (ftv t {- `Set.union` ftv st -} 
-          ) (ftv (typeContext nv)))
+          (ftv t) (ftv (typeContext nv)))
       ( Set.toList $
         Set.difference
-          (frv t {- `Set.union` frv st -} 
-          ) (frv (typeContext nv))) t
+          (frv t) (frv (typeContext nv))) t
 
 
-withEnv :: (Env Type -> Env Type) -> TC a -> TC a
+withEnv :: (Env Scheme -> Env Scheme) -> TC a -> TC a
 withEnv f = local (\nv -> nv { typeContext = f (typeContext nv) })
+
+
+
+resolve :: String -> Env a -> TC a
+resolve x (Env xs) =
+  case Map.lookup x xs of
+    Just x -> return x
+    Nothing -> throwError $ "Name not in scope: " ++ x 

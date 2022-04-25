@@ -23,8 +23,9 @@ data Row = NilR
 data Type = FunT Type Type
           | AppT Type Type
           | SusT Type Row
+          | NumT | BoolT 
           | VarT Name
-          deriving (Eq , Show)
+          deriving (Eq)
 
 -- The type `Env a` contains a collection of unapplied substitutions of
 -- variables for "syntax" typed by `a`.
@@ -49,5 +50,22 @@ data Scheme = Scheme
   { typeVars :: [Name] 
   , rowVars  :: [Name]
   , ty       :: Type 
-  } deriving (Eq , Show)
+  } deriving (Eq)
 
+
+instance Show Scheme where
+  show s@(Scheme xs ys t)
+    | null xs && null ys = show t
+    | otherwise          =
+      "∀ " <> foldr (\v s -> v <> " " <> s) ""
+                         (typeVars s <> rowVars s)
+                <> ". " <> show t
+
+instance Show Type where
+  show (VarT x)              = x
+  show (FunT t@(FunT _ _) u) = "(" <> show t <> ") → " <> show u
+  show (FunT t u)            = show t <> " → " <> show u
+  show (AppT t u)         = show t <> "(" <> show u  <> ")"
+  show (SusT t r) = "{ " ++ show t ++ " <" ++ show r ++ ">" ++ " }" 
+  show NumT = "ℕ"
+  show BoolT = "𝔹" 
