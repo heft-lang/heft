@@ -138,8 +138,8 @@ printResult :: Result -> IO ()
 printResult (Left err) = do
   putStrLn err
 printResult (Right (σ , (ε , εl))) = do
-  putStrLn $ "Inferred: " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
+  putStrLn $ "Inferred:\t " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
 
 test :: IO ()
 test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5]
-  where runTest e = printResult (infer e) >> putStr "\n" 
+  where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
