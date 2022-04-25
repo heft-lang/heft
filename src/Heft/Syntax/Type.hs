@@ -16,7 +16,7 @@ data Kind = Star
 data Row = NilR 
          | ConsR Label Row
          | VarR Name
-         deriving (Eq , Show) 
+         deriving (Eq) 
 
 -- Type syntax
 -- 
@@ -69,3 +69,13 @@ instance Show Type where
   show (SusT t r) = "{ " ++ show t ++ " <" ++ show r ++ ">" ++ " }" 
   show NumT = "ℕ"
   show BoolT = "𝔹" 
+
+instance Show Row where
+  show NilR          = "[]"
+  show (ConsR l NilR) = "[" <> l <> "]" 
+  show els@(ConsR _ _ ) = "[" <> showElements els <> "]"
+    where showElements NilR = ""
+          showElements (ConsR e NilR) = show e
+          showElements (ConsR e r) = show e <> "," <> showElements r
+          showElements (VarR x) = x
+  show (VarR r)           = r 

@@ -125,22 +125,37 @@ numSubscript = map ((!!) nums . read . (flip (:) $ [])) . show
                , '₈'
                , '₉'
                ] 
+
+rownames :: [String] -> [String]
+rownames rs =
+  if
+    length rs == 1
+  then
+    ["ρ"]
+  else
+    map ((:) 'ρ' . numSubscript) (take (length rs) [0..]) 
   
 -- Normalize a scheme w.r.t. alpha equivalence
 normalizeAlpha :: Scheme -> Scheme
 normalizeAlpha (Scheme ts rs t) =
-   Scheme nts nrs
+   Scheme nts (rownames rs)
     (apply (Substitution
       (Env $ Map.fromList (zipWith (,) ts (map VarT nts)))
-      (Env $ Map.fromList (zipWith (,) rs (map VarR nrs)))
+      (Env $ Map.fromList (zipWith (,) rs (map VarR (rownames rs))))
     ) t)
   where nts :: [String]
         nts = take (length ts) (fmap return ['a'..])
 
-        nrs :: [String]
-        nrs = if
-                length rs == 1
-              then
-                ["ρ"]
-              else
-                map ((:) 'ρ' . numSubscript) (take (length rs) [0..]) 
+        
+
+-- normalize a row w.r.t. alpha equivalence 
+normalizeAnn :: (Row , Row) -> (Row , Row)
+normalizeAnn (r1 , r2) = (s <$$> r1 , s <$$> r2)  
+  where s :: Substitution
+        s = Substitution
+          { typeSubstitutions = mempty
+          , rowSubstitutions  = Env (Map.fromList rawSubst)
+          }
+
+        rawSubst :: [(Name , Row)]
+        rawSubst = zip (Set.toList $ (frv r1 `Set.union` frv r2)) (VarR <$> rownames (Set.toList $ (frv r1 `Set.union` frv r2)))

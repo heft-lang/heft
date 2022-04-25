@@ -29,11 +29,11 @@ emptyEnv = TCEnv
 
 type TC = ReaderT TCEnv (ExceptT String (State TCState))
 
-conclude :: (Substitution , Type , Row) -> TC (Substitution , Type , Row)
-conclude (s , t , ε) =
+conclude :: (Substitution , Type , (Row , Row)) -> TC (Substitution , Type , (Row , Row))
+conclude (s , t , (ε , εl)) =
   modify (\st ->
     st { inferredConstraints = () {- apply s `Set.map` (inferredConstraints st) -}  })
-  >> return (s , t , ε)
+  >> return (s , t , (ε , εl))
 
 freshT :: TC Type
 freshT = do
@@ -57,9 +57,11 @@ runTC' f nv = runState
     , inferredConstraints = mempty
     } ) 
 
+{-
 printResult :: Either String Scheme -> String
 printResult (Left err) = "error: \n\t\x1b[4m" <> err <> "\x1b[0m"
 printResult (Right t)  = "scheme: \n\t\x1b[1m \x1b[36m" <> show t <> "\x1b[0m \x1b[0m" 
+-}
 
 freshR :: TC Row
 freshR = do
