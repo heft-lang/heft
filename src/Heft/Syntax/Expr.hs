@@ -1,6 +1,7 @@
 module Heft.Syntax.Expr where
 
 import Heft.Syntax.Misc
+import Heft.Syntax.Type 
 
 {- Syntax:
 
@@ -52,6 +53,10 @@ data Expr = V Val
           | Op Name [Expr]
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr
+
+          -- Declares a new effect and its operations
+          | LetEff Name [(Name {- op name -} , Name {- effect "remainder" -} , Type {- Return Type -} , [Type] {- Argument Types -} )] Expr
+          
   deriving Show
 
 data Pat = PCon String [Pat]

@@ -86,27 +86,41 @@ instantiate σ@(Scheme xs ys t) = do
   return (apply (Substitution (Env $ Map.fromList s1) (Env $ Map.fromList s2) ) t)
 
 
--- Generalize over the free variables in a type 
+generalize' :: Type -> Set.Set String -> Set.Set String -> Scheme
+generalize' t tbl rbl = 
+  Scheme
+ ( Set.toList $
+       Set.difference
+       (ftv t) tbl)
+  ( Set.toList $
+    Set.difference
+         (frv t) rbl) t
+
+-- Generalize over the free variables in a type, ignoring
+-- all free variables in the environment. 
 generalize :: Type -> TC Scheme
 generalize t = do
   nv <- ask
-  return $ 
-    Scheme
-      ( Set.toList $
-        Set.difference
-          (ftv t) (ftv (typeContext nv)))
-      ( Set.toList $
-        Set.difference
-          (frv t) (frv (typeContext nv))) t
+  return $ generalize' t (ftv $ typeContext nv) (frv $ typeContext nv) 
 
 
 withEnv :: (Env Scheme -> Env Scheme) -> TC a -> TC a
 withEnv f = local (\nv -> nv { typeContext = f (typeContext nv) })
-
-
 
 resolve :: String -> Env a -> TC a
 resolve x (Env xs) =
   case Map.lookup x xs of
     Just x -> return x
     Nothing -> throwError $ "Name not in scope: " ++ x 
+
+-- Declares a new operation for the effect "l" 
+declareOp :: String -> (String , String , Type , [Type]) -> TC (String , Scheme)
+declareOp l (op , r , t , args) = do
+  let ft = mkFunT args (SusT t ( ConsR l (VarR r) , NilR ))
+  -- TODO: when we add a global tc state with all declared effects, we'll want
+  -- to add declared operations here. For now, we just return the calculated type.
+  return (op , generalize' ft mempty mempty) 
+  
+  where mkFunT :: [Type] -> Type -> Type
+        mkFunT []     u = u
+        mkFunT (t:ts) u = FunT t (mkFunT ts u)

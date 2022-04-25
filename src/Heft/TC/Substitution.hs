@@ -39,7 +39,13 @@ singT :: (String , Type) -> Substitution
 singT (x , t) = Substitution
   { typeSubstitutions = Env { entries = Map.singleton x t }
   , rowSubstitutions  = mempty 
-  } 
+  }
+
+singR :: (String , Row) -> Substitution
+singR (x , t) = Substitution
+  { typeSubstitutions = mempty 
+  , rowSubstitutions  = Env { entries = Map.singleton x t } 
+  }
 
 
 -- Defines common operations for the (mutually recursive) syntax of types 

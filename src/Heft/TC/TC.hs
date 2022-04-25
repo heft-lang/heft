@@ -85,8 +85,6 @@ tc (App e1 e2) = do
       )
     )
 
-
-
 -- Suspension
 tc (Susp e) = do 
   ε                     <- freshR
@@ -98,6 +96,7 @@ tc (Susp e) = do
     , (ε , εl)
     ) 
 
+-- Enactment 
 tc (Run e) = do
   t                     <- freshT 
   ε                     <- freshR
@@ -120,10 +119,18 @@ tc (Run e) = do
 tc (Con x es) = _
 tc (Match e cs) = _ 
 tc (Handle ps ep e) = _
-tc (Op x es) = _
--}
+-} 
 
---TODO effects
+-- Operations. Defined in terms of Var/App rules 
+tc (Op x es) = tc (mkE x (reverse es))
+
+  where mkE :: String -> [Expr] -> Expr
+        mkE x [] = Var x
+        mkE x (e:es) = App (mkE x es) e 
+
+
+-- (Recursive) Let bindings
+-- TODO: no recursive argument is added to the environment yet
 tc (Letrec x e1 e2) = do
   (s1 , t , (ε1 , εl1)) <- tc e1
   σ                     <- withEnv (s1<$$>) (generalize t) 
@@ -144,10 +151,17 @@ tc (Letrec x e1 e2) = do
 tc (BOp e1 op e2) = _ 
 -}
 
+-- Effect declarations 
+tc (LetEff l ops e) = do
+  ops' <- mapM (declareOp l) ops
+  foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
+
+
+
 type Result = Either String (Scheme , (Row , Row)) 
 
--- | Infers the type of an expression, returning either an error string, or the
---   inferred type scheme.
+-- Infers the type of an expression, returning either an error string, or the
+-- inferred type scheme.
 infer :: Expr -> Result
 infer e = (\(σ , ann) -> (normalizeAlpha σ , normalizeAnn ann))  <$> 
   ( fst $ runTC $
@@ -178,7 +192,24 @@ expr8  = Letrec "enact" (Lam "x" (Run (Var "x"))) (Var "enact")
 
 
 expr9  = Letrec "enact" (Lam "x" (Susp (Run (Var "x")))) (Var "enact") 
- 
+
+expr10 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Op "abort" [])
+expr11 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Run $ Op "abort" [])
+
+-- { x_2 | ["Catch",r_0] * [] } → { x_2 | ["Catch",r_0] * [] } , { x_3 | ["Catch",r_3] * [] }
+expr12 =
+  LetEff "Catch"
+    [ ("throw" , "r" , (VarT "a") , [])
+    , ("catch" , "r" , (VarT "a") , [ (SusT (VarT "a") (ConsR "Catch" (VarR "r"),NilR)) , (SusT (VarT "a") (ConsR "Catch" (VarR "r"), NilR))])
+    ]
+    (Op "catch" [Op "throw" [] , Susp (Num 0)])
+
+expr13 =
+  LetEff "Catch"
+    [ ("throw" , "r" , (VarT "a") , [])
+    , ("catch" , "r" , (VarT "a") , [ (SusT (VarT "a") (ConsR "Catch" (VarR "r"),NilR)) , (SusT (VarT "a") (ConsR "Catch" (VarR "r"), NilR))])
+    ]
+    (Letrec "catch_fun" (Lam "t" (Lam "c" (Op "catch" [Var "t" , Var "c"]))) (Var "catch_fun"))
 
 printResult :: Result -> IO ()
 printResult (Left err) = do
@@ -187,5 +218,5 @@ printResult (Right (σ , (ε , εl))) = do
   putStrLn $ "Inferred:\t " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
 
 test :: IO ()
-test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5,expr6,expr7,expr8,expr9]
+test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5,expr6,expr7,expr8,expr9,expr10,expr11,expr12,expr13]
   where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 

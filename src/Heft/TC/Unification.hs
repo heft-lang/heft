@@ -32,7 +32,7 @@ class TypeSyntax a => Unify a where
   unify :: a -> a -> TC Substitution 
 
 instance Unify Type where
-  unify (FunT t u) (FunT u' t') = do
+  unify (FunT t u) (FunT t' u') = do
     s1 <- unify t t'
     s2 <- unify (s1 <$$> u) (s1 <$$> u')
     return (s2 <> s1)
