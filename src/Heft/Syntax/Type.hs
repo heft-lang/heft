@@ -67,15 +67,15 @@ instance Show Type where
   show (FunT t u)            = show t <> " → " <> show u
   show (AppT t u)         = show t <> "(" <> show u  <> ")"
   show (SusT t (ε , εl)) = "{ " ++ show t ++ " | " ++ show ε ++ " * " ++ show εl ++ " }" 
-  show NumT = "ℕ"
+  show NumT = "ℤ"
   show BoolT = "𝔹" 
 
 instance Show Row where
-  show NilR          = "[]"
-  show (ConsR l NilR) = "[" <> l <> "]" 
-  show els@(ConsR _ _ ) = "[" <> showElements els <> "]"
+  show NilR             = "<>"
+  show (ConsR l NilR)   = "<" <> l <> ">" 
+  show els@(ConsR _ _ ) = "<" <> showElements els <> ">"
     where showElements NilR = ""
           showElements (ConsR e NilR) = show e
           showElements (ConsR e r) = show e <> "," <> showElements r
           showElements (VarR x) = x
-  show (VarR r)           = r 
+  show (VarR r) = r 

@@ -132,18 +132,21 @@ tc (Op x es) = tc (mkE x (reverse es))
 -- (Recursive) Let bindings
 -- TODO: no recursive argument is added to the environment yet
 tc (Letrec x e1 e2) = do
-  (s1 , t , (ε1 , εl1)) <- tc e1
-  σ                     <- withEnv (s1<$$>) (generalize t) 
-  (s2 , u , (ε2 , εl2)) <- withEnv ((s1<$$>) . bindS x σ) (tc e2)
-  s3                    <- unify (s2 <$$> ε1) ε2
-  s4                    <- unify
-                             ((s3 <> s2) <$$> εl1)
-                             (s3         <$$> εl2) 
+  t                      <- freshT 
+  (s1 , t' , (ε1 , εl1)) <- withEnv (bindT x t) (tc e1)
+  σ                      <- withEnv (s1<$$>) (generalize t') 
+  (s2 , u , (ε2 , εl2))  <- withEnv ((s1<$$>) . bindS x σ) (tc e2)
+  s3                     <- unify (s2 <$$> ε1) ε2
+  s4                     <- unify
+                              ((s3 <> s2) <$$> εl1)
+                              (s3         <$$> εl2)
+  let s = s4 <> s3 <> s2 <> s1 
+  s5                     <- unify (s <$$> t') (s <$$> t) 
   conclude
-    ( s4 <> s3 <> s2 <> s1
-    , (s4 <> s3) <$$> u
-    , ( (s4 <> s3 <> s2) <$$> ε1
-      , (s4 <> s3 <> s2) <$$> εl1
+    ( s5 <> s
+    , (s5 <> s4 <> s3) <$$> u
+    , ( (s5 <> s4 <> s3 <> s2) <$$> ε1
+      , (s5 <> s4 <> s3 <> s2) <$$> εl1
       )
     ) 
 
@@ -196,7 +199,7 @@ expr9  = Letrec "enact" (Lam "x" (Susp (Run (Var "x")))) (Var "enact")
 expr10 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Op "abort" [])
 expr11 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Run $ Op "abort" [])
 
--- { x_2 | ["Catch",r_0] * [] } → { x_2 | ["Catch",r_0] * [] } , { x_3 | ["Catch",r_3] * [] }
+-- catch throw { 0 } :: { ℤ ∣ [Catch,ρ] * [] } ∣ ε * εₗ
 expr12 =
   LetEff "Catch"
     [ ("throw" , "r" , (VarT "a") , [])
@@ -204,12 +207,23 @@ expr12 =
     ]
     (Op "catch" [Op "throw" [] , Susp (Num 0)])
 
+-- let catch_fun = λ c t -> catch c t in catch_fun
+--   :: ∀ α ρ . { a | [Catch,ρ] * [] } → { a | [Catch,ρ] * [] } → { a | [Catch,ρ] * [] } | ε * εₗ
 expr13 =
   LetEff "Catch"
     [ ("throw" , "r" , (VarT "a") , [])
     , ("catch" , "r" , (VarT "a") , [ (SusT (VarT "a") (ConsR "Catch" (VarR "r"),NilR)) , (SusT (VarT "a") (ConsR "Catch" (VarR "r"), NilR))])
     ]
     (Letrec "catch_fun" (Lam "t" (Lam "c" (Op "catch" [Var "t" , Var "c"]))) (Var "catch_fun"))
+
+-- Should fail: A function body cannot have any effects (unless they're suspended)
+expr14 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Lam "x" (Run (Op "abort" []))) 
+
+-- let f = λ x → f 10 in f 
+expr15 = Letrec "f" (Lam "x" (App (Var "f") (Num 10))) (Var "f")
+
+-- letrec f = λ x → { (f (num x)!)! }  in f 
+expr16 = LetEff "Num" [("num" , "r" , NumT , [NumT])] (Letrec "f" (Lam "x" (Susp (Run (App (Var "f") (Run (Op "num" [Var "x"])))))) (Var "f"))
 
 printResult :: Result -> IO ()
 printResult (Left err) = do
@@ -218,5 +232,5 @@ printResult (Right (σ , (ε , εl))) = do
   putStrLn $ "Inferred:\t " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
 
 test :: IO ()
-test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5,expr6,expr7,expr8,expr9,expr10,expr11,expr12,expr13]
+test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5,expr6,expr7,expr8,expr9,expr10,expr11,expr12,expr13,expr14,expr15,expr16]
   where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
