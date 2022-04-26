@@ -12,6 +12,9 @@ import Control.Monad.Reader
 
 import Debug.Trace
 
+
+{- Type checker -} 
+
 data TCState = TCState
   { typevarCount        :: Int
   , rowvarCount         :: Int
@@ -19,8 +22,12 @@ data TCState = TCState
   , declaredDatatypes   :: [String]  
   }
 
+data KCEnv = KCEnv
+  { kindContext :: Env Kind
+  } 
+
 data TCEnv = TCEnv
-  { typeContext       :: Env Scheme 
+  { typeContext :: Env Scheme 
   }
 
 emptyEnv :: TCEnv
@@ -28,6 +35,7 @@ emptyEnv = TCEnv
   { typeContext      = mempty
   }
 
+-- Type checking monad
 type TC = ReaderT TCEnv (ExceptT String (State TCState))
 
 conclude :: (Substitution , Type , (Row , Row)) -> TC (Substitution , Type , (Row , Row))
@@ -141,3 +149,22 @@ declareCons dname params (con , args) = do
   where mkAppT :: String -> [String] -> Type
         mkAppT dname []         = VarT dname
         mkAppT dname (p:params) = AppT (mkAppT dname params) (VarT p) 
+
+
+
+{- Kind checker -} 
+
+-- Kind checking monad 
+type KC = ReaderT KCEnv (Except String) 
+
+checkKindEqualTo :: KC Kind -> Kind -> KC ()
+checkKindEqualTo kc k = do
+  k' <- kc
+  if k == k' then
+    return ()
+  else
+    throwError $ "Kinding error: expected " ++ show k ++ ", but inferred " ++ show k' 
+
+
+runKC :: KC a -> KCEnv -> Either String a
+runKC f nv = runExcept (runReaderT f nv) 

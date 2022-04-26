@@ -6,7 +6,6 @@ import qualified Data.Set as Set
 import Heft.Syntax.Misc
 import Heft.Syntax.Type
 
-
 data Substitution = Substitution
  { typeSubstitutions :: Env Type
  , rowSubstitutions  :: Env Row
