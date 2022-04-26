@@ -5,12 +5,27 @@ import Heft.TC.Substitution
 import Heft.TC.TCMonad
 
 import Control.Monad.Except
+import Control.Monad.State
 
+import Data.Functor 
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
-unifyTypeVar :: String -> Type -> TC Substitution
-unifyTypeVar x t
+unifyTypeVar :: [String] -> String -> Type -> TC Substitution
+unifyTypeVar ds x t
+  | x `elem` ds          =
+      case t of
+        (VarT y) ->
+          if y `elem` ds then
+            if x == y then
+              return mempty
+            else
+              throwError $ "Unification failed: data types " ++ x ++ " and " ++ y ++ " are not equal."
+          else
+            throwError $ "Unification failed: cannot unify datatype " ++ x ++ " with variable " ++ y 
+        _        -> throwError $  "Unification failed for types: "
+                               ++ show (VarT x) ++ " , " ++ show t
+        
   | t == VarT x          = return mempty
   | Set.member x (ftv t) =
       throwError $  "Occurs check failed: the name "
@@ -47,10 +62,14 @@ instance Unify Type where
     return (s3 <> s2 <> s1)
   unify NumT  NumT  = return mempty
   unify BoolT BoolT = return mempty
-  unify t (VarT x) = unifyTypeVar x t
-  unify (VarT x) t = unifyTypeVar x t
+  unify t (VarT x) = do
+    datatypes <- get <&> declaredDatatypes
+    unifyTypeVar datatypes x t
+  unify (VarT x) t = do
+    datatypes <- get <&> declaredDatatypes
+    unifyTypeVar datatypes x t
   unify t u =
-    throwError $  "Unification failed for types "
+    throwError $  "Unification failed for types: "
                ++ show t ++ " , " ++ show u 
 
 instance Unify Row where

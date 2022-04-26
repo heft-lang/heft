@@ -15,7 +15,8 @@ import Debug.Trace
 data TCState = TCState
   { typevarCount        :: Int
   , rowvarCount         :: Int
-  , inferredConstraints :: () -- We don't use this right now, but may in the future when adding qualified types  
+  , inferredConstraints :: () -- We don't use this right now, but may in the future when adding qualified types
+  , declaredDatatypes   :: [String]  
   }
 
 data TCEnv = TCEnv
@@ -46,6 +47,7 @@ runTC f = runState (runExceptT (runReaderT f emptyEnv)) (TCState
   { typevarCount        = 0
   , rowvarCount         = 0
   , inferredConstraints = mempty
+  , declaredDatatypes   = [] 
   } )
 
 runTC' :: TC a -> TCEnv -> (Either String a , TCState)
@@ -55,6 +57,7 @@ runTC' f nv = runState
     { typevarCount        = 0
     , rowvarCount         = 0
     , inferredConstraints = mempty
+    , declaredDatatypes   = [] 
     } ) 
 
 {-
@@ -101,7 +104,8 @@ generalize' t tbl rbl =
 generalize :: Type -> TC Scheme
 generalize t = do
   nv <- ask
-  return $ generalize' t (ftv $ typeContext nv) (frv $ typeContext nv) 
+  st <- get 
+  return $ generalize' t ((ftv $ typeContext nv) `Set.union` Set.fromList (declaredDatatypes st)) (frv $ typeContext nv) 
 
 
 withEnv :: (Env Scheme -> Env Scheme) -> TC a -> TC a
@@ -113,14 +117,27 @@ resolve x (Env xs) =
     Just x -> return x
     Nothing -> throwError $ "Name not in scope: " ++ x 
 
+mkFunT :: [Type] -> Type -> Type
+mkFunT []     u = u
+mkFunT (t:ts) u = FunT t (mkFunT ts u)
+
 -- Declares a new operation for the effect "l" 
 declareOp :: String -> (String , String , Type , [Type]) -> TC (String , Scheme)
 declareOp l (op , r , t , args) = do
   let ft = mkFunT args (SusT t ( ConsR l (VarR r) , NilR ))
-  -- TODO: when we add a global tc state with all declared effects, we'll want
+  -- TODO: when we add a global tc state with all declared effects, we'll want[
   -- to add declared operations here. For now, we just return the calculated type.
   return (op , generalize' ft mempty mempty) 
+
+registerDatatype :: String -> TC ()
+registerDatatype x = modify (\st -> st { declaredDatatypes = (x:declaredDatatypes st) })
   
-  where mkFunT :: [Type] -> Type -> Type
-        mkFunT []     u = u
-        mkFunT (t:ts) u = FunT t (mkFunT ts u)
+declareCons :: String -> [String] -> (String , [Type]) -> TC (String , Scheme)
+declareCons dname params (con , args) = do
+  let cty = mkFunT args (mkAppT dname (reverse params))
+  -- TODO: we may want to add the declared constructor to a global state here 
+  return (con , generalize' cty (Set.singleton dname) mempty)
+
+  where mkAppT :: String -> [String] -> Type
+        mkAppT dname []         = VarT dname
+        mkAppT dname (p:params) = AppT (mkAppT dname params) (VarT p) 

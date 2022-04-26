@@ -53,6 +53,12 @@ data Scheme = Scheme
   } deriving (Eq)
 
 
+instance Show Kind where
+  show Star = "★"
+  show RowK = "𝓡"
+  show (FunK k1@(FunK _ _) k2) = "(" ++ show k1 ++ ") → " ++ show k2 
+  show (FunK k1 k2) = show k1 ++ " → " ++ show k2 
+
 instance Show Scheme where
   show s@(Scheme xs ys t)
     | null xs && null ys = show t

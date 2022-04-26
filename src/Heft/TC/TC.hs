@@ -115,8 +115,14 @@ tc (Run e) = do
       )
     ) 
 
+
+tc (Con x es) = tc (mkE x (reverse es))
+
+  where mkE :: String -> [Expr] -> Expr
+        mkE x []     = Var x
+        mkE x (e:es) = App (mkE x es) e 
+
 {- 
-tc (Con x es) = _
 tc (Match e cs) = _ 
 tc (Handle ps ep e) = _
 -} 
@@ -194,6 +200,10 @@ tc (LetEff l ops e) = do
   ops' <- mapM (declareOp l) ops
   foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
 
+tc (LetData dname params cons e) = do
+  registerDatatype dname 
+  cons' <- mapM (declareCons dname (fst <$> params)) cons
+  foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' (tc e) 
 
 type Result = Either String (Scheme , (Row , Row)) 
 
@@ -261,7 +271,17 @@ expr16 = LetEff "Num" [("num" , "r" , NumT , [NumT])] (Letrec "f" (Lam "x" (Susp
 
 expr17 = Letrec "f" (Lam "x" (Lam "y" (BOp (Var "x") Plus (Var "y")))) (Var "f")
 
-expr18 = BOp (Num 10) Eq (Num 11) 
+expr18 = BOp (Num 10) Eq (Num 11)
+
+expr19 = LetData "Unit" [] [("TT" , [])] (Var "TT")
+
+expr20 = LetData "Nat" [] [("Zero" , []) , ("Suc" , [VarT "Nat"])] (Con "Suc" [(Con "Zero" [])])
+
+expr21 = LetData "Nat" [] [("Zero" , []) , ("Suc" , [VarT "Nat"])] (App (Var "Suc") (Var "Suc"))
+
+expr22 = LetData "Maybe" [("a" , Star)] [("Just" , [VarT "a"]), ("Nothing" , [])] (Con "Just" [])   
+
+expr23 = LetData "Maybe" [("a" , Star)] [("Just" , [VarT "a"]), ("Nothing" , [])] (Con "Just" [Con "Nothing" []])   
 
 printResult :: Result -> IO ()
 printResult (Left err) = do
@@ -291,6 +311,11 @@ test =
     , expr16
     , expr17
     , expr18
+    , expr19
+    , expr20
+    , expr21
+    , expr22
+    , expr23
     ]
   where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
 

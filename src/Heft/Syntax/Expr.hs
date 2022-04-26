@@ -55,7 +55,23 @@ data Expr = V Val
           | BOp Expr BinOp Expr
 
           -- Declares a new effect and its operations
-          | LetEff Name [(Name {- op name -} , Name {- effect "remainder" -} , Type {- Return Type -} , [Type] {- Argument Types -} )] Expr
+          | LetEff Name
+              [ ( Name   -- op name 
+                , Name   -- variable that refers to the effect "remainder" 
+                , Type   -- Return Type 
+                , [Type] -- Argument Types 
+                )
+              ] Expr
+
+          -- Declares a new data type 
+          | LetData Name
+              [(Name , Kind)]   -- Parameters 
+              [ ( Name          -- constructor name 
+                , [Type]        -- Argument Types
+                )
+              ] Expr 
+          
+          
           
   deriving Show
 
