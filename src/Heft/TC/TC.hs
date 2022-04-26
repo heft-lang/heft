@@ -150,15 +150,49 @@ tc (Letrec x e1 e2) = do
       )
     ) 
 
-{- 
-tc (BOp e1 op e2) = _ 
--}
+ 
+tc (BOp e1 Eq e2) = do
+  (s1 , t , (ε1 , εl1)) <- tc e1
+  (s2 , u , (ε2 , εl2)) <- tc e2
+  s3                    <- unify ((s2 <> s1) <$$> t) NumT
+  s4                    <- unify ((s3 <> s2 <> s1) <$$> u) NumT
+  s5                    <- unify
+                             ((s4 <> s3 <> s2 <> s1) <$$> ε1)
+                             ((s4 <> s3 <> s2 <> s1) <$$> ε2)
+  s6                    <- unify
+                             ((s5 <> s4 <> s3 <> s2 <> s1) <$$> εl1)
+                             ((s5 <> s4 <> s3 <> s2 <> s1) <$$> εl2) 
+  let s = s6 <> s5 <> s4 <> s3 <> s2 <> s1 
+  conclude
+    ( s
+    , BoolT
+    , (s <$$> ε1 , s <$$> εl1) ) 
+
+tc (BOp e1 Plus e2) = do
+  (s1 , t , (ε1 , εl1)) <- tc e1
+  (s2 , u , (ε2 , εl2)) <- tc e2
+  s3                    <- unify ((s2 <> s1) <$$> t) NumT
+  s4                    <- unify ((s3 <> s2 <> s1) <$$> u) NumT
+  s5                    <- unify
+                             ((s4 <> s3 <> s2 <> s1) <$$> ε1)
+                             ((s4 <> s3 <> s2 <> s1) <$$> ε2)
+  s6                    <- unify
+                             ((s5 <> s4 <> s3 <> s2 <> s1) <$$> εl1)
+                             ((s5 <> s4 <> s3 <> s2 <> s1) <$$> εl2) 
+  let s = s6 <> s5 <> s4 <> s3 <> s2 <> s1 
+  conclude
+    ( s
+    , NumT
+    , (s <$$> ε1 , s <$$> εl1) ) 
+
+tc (BOp e1 Minus e2) = tc (BOp e1 Plus e2) 
+
+tc (BOp e1 Times e2) = tc (BOp e1 Plus e2) 
 
 -- Effect declarations 
 tc (LetEff l ops e) = do
   ops' <- mapM (declareOp l) ops
   foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
-
 
 
 type Result = Either String (Scheme , (Row , Row)) 
@@ -225,6 +259,10 @@ expr15 = Letrec "f" (Lam "x" (App (Var "f") (Num 10))) (Var "f")
 -- letrec f = λ x → { (f (num x)!)! }  in f 
 expr16 = LetEff "Num" [("num" , "r" , NumT , [NumT])] (Letrec "f" (Lam "x" (Susp (Run (App (Var "f") (Run (Op "num" [Var "x"])))))) (Var "f"))
 
+expr17 = Letrec "f" (Lam "x" (Lam "y" (BOp (Var "x") Plus (Var "y")))) (Var "f")
+
+expr18 = BOp (Num 10) Eq (Num 11) 
+
 printResult :: Result -> IO ()
 printResult (Left err) = do
   putStrLn err
@@ -232,5 +270,27 @@ printResult (Right (σ , (ε , εl))) = do
   putStrLn $ "Inferred:\t " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
 
 test :: IO ()
-test = mapM_ runTest [expr0,expr1,expr2,expr3,expr4,expr5,expr6,expr7,expr8,expr9,expr10,expr11,expr12,expr13,expr14,expr15,expr16]
+test =
+  mapM_ runTest
+    [ expr0
+    , expr1
+    , expr2
+    , expr3
+    , expr4
+    , expr5
+    , expr6
+    , expr7
+    , expr8
+    , expr9
+    , expr10
+    , expr11
+    , expr12
+    , expr13
+    , expr14
+    , expr15
+    , expr16
+    , expr17
+    , expr18
+    ]
   where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
+
