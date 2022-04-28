@@ -1,5 +1,6 @@
 module Heft.TC.TCMonad where
 
+import Data.Functor 
 import qualified Data.Set as Set
 import qualified Data.Map as Map 
 
@@ -19,7 +20,7 @@ data TCState = TCState
   { typevarCount        :: Int
   , rowvarCount         :: Int
   , inferredConstraints :: () -- We don't use this right now, but may in the future when adding qualified types
-  , declaredDatatypes   :: [String]  
+  , declaredDatatypes   :: [(String , [String])]  
   }
 
 data KCEnv = KCEnv
@@ -113,7 +114,7 @@ generalize :: Type -> TC Scheme
 generalize t = do
   nv <- ask
   st <- get 
-  return $ generalize' t ((ftv $ typeContext nv) `Set.union` Set.fromList (declaredDatatypes st)) (frv $ typeContext nv) 
+  return $ generalize' t ((ftv $ typeContext nv) `Set.union` Set.fromList (fst <$> declaredDatatypes st)) (frv $ typeContext nv) 
 
 
 withEnv :: (Env Scheme -> Env Scheme) -> TC a -> TC a
@@ -137,7 +138,7 @@ declareOp l (op , r , t , args) = do
   -- to add declared operations here. For now, we just return the calculated type.
   return (op , generalize' ft mempty mempty) 
 
-registerDatatype :: String -> TC ()
+registerDatatype :: (String , [String]) -> TC ()
 registerDatatype x = modify (\st -> st { declaredDatatypes = (x:declaredDatatypes st) })
   
 declareCons :: String -> [String] -> (String , [Type]) -> TC (String , Scheme)
@@ -150,6 +151,13 @@ declareCons dname params (con , args) = do
         mkAppT dname []         = VarT dname
         mkAppT dname (p:params) = AppT (mkAppT dname params) (VarT p) 
 
+checkDeclaredConstructor :: String -> TC ()
+checkDeclaredConstructor x = do
+  datatypes <- get <&> declaredDatatypes
+  if any (any (==x) . snd) datatypes then
+    return ()
+  else
+    throwError $ x ++ " is not a constructor of any declared data type."
 
 
 {- Kind checker -} 

@@ -20,9 +20,9 @@ unifyTypeVar ds x t
             if x == y then
               return mempty
             else
-              throwError $ "Unification failed: data types " ++ x ++ " and " ++ y ++ " are not equal."
+              throwError $ "Unification failed: data types: " ++ x ++ " and " ++ y ++ " are not equal."
           else
-            throwError $ "Unification failed: cannot unify datatype " ++ x ++ " with variable " ++ y 
+            return (Substitution (Env $ Map.singleton y (VarT x)) mempty)
         _        -> throwError $  "Unification failed for types: "
                                ++ show (VarT x) ++ " , " ++ show t
         
@@ -63,10 +63,10 @@ instance Unify Type where
   unify NumT  NumT  = return mempty
   unify BoolT BoolT = return mempty
   unify t (VarT x) = do
-    datatypes <- get <&> declaredDatatypes
+    datatypes <- get <&> (map fst) . declaredDatatypes
     unifyTypeVar datatypes x t
   unify (VarT x) t = do
-    datatypes <- get <&> declaredDatatypes
+    datatypes <- get <&> (map fst) . declaredDatatypes
     unifyTypeVar datatypes x t
   unify t u =
     throwError $  "Unification failed for types: "

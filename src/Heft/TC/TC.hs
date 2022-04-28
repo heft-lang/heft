@@ -24,8 +24,9 @@ bindT x t (Env xs) = Env (Map.insert x (Scheme [] [] t) xs)
 bindS :: String -> Scheme -> Env Scheme -> Env Scheme
 bindS x σ (Env xs) = Env (Map.insert x σ xs) 
 
+type TCResult = (Substitution , Type , (Row , Row))
 
-tc :: Expr -> TC (Substitution , Type , (Row , Row))
+tc :: Expr -> TC TCResult
 
 -- Values
 tc (V _) = throwError "Internal error" 
@@ -122,8 +123,56 @@ tc (Con x es) = tc (mkE x (reverse es))
         mkE x []     = Var x
         mkE x (e:es) = App (mkE x es) e 
 
+
+tc (Match e cs) = do
+  (s , t , (ε , εl))   <- tc e
+  xs                   <- mapM (tcMatchClause t) cs
+  u                    <- freshT 
+  foldM unifyResults (mempty , u , (ε , εl)) xs >>= conclude 
+
+  where tcMatchClause :: Type -> (Pat , Expr) -> TC TCResult
+        tcMatchClause t (pat , e) = do
+          (s1 , patternBindings) <- processPattern t pat
+          (s2 , t , (ε , εl))    <- withEnv ((s1<$$>) . patternBindings) (tc e)
+          return (s2 <> s1 , t , (ε , εl))
+
+        processPattern :: Type -> Pat -> TC (Substitution , Env Scheme -> Env Scheme)
+        processPattern t (PCon x pats) = do
+          checkDeclaredConstructor x 
+          σ  <- (ask <&> typeContext) >>= resolve x
+          ct <- instantiate σ
+          s1 <- unify (returnTypeOf ct) t
+          (s2 , patternBindings) <- processArgPatterns (argTypesOf ct) pats (mempty , id)
+          return (s2 <> s1 , patternBindings)
+        processPattern t (PVar x     ) = return (mempty , bindT x t)
+
+        processArgPatterns :: [Type] -> [Pat] -> (Substitution , Env Scheme -> Env Scheme) -> TC (Substitution , Env Scheme -> Env Scheme)
+        processArgPatterns [] []           acc = return acc
+        processArgPatterns (t:ts) (p:pats) acc = do
+          (s , patternBindings) <- processPattern t p
+          processArgPatterns ts pats (s <> fst acc , patternBindings . snd acc) 
+        processArgPatterns _      _        _ = throwError $ "Incorrect number of arguments in constructor pattern" 
+
+        returnTypeOf :: Type -> Type
+        returnTypeOf (FunT _ u) = returnTypeOf u
+        returnTypeOf t          = t
+
+        argTypesOf :: Type -> [Type]
+        argTypesOf (FunT t u) = t:argTypesOf u
+        argTypesOf _          = [] 
+                                         
+        unifyResults :: TCResult -> TCResult -> TC TCResult
+        unifyResults (s , t , (ε , εl)) (s' , t' , (ε' , εl')) = do 
+          s1 <- unify ((s' <> s) <$$> t) ((s' <> s) <$$> t')
+          s2 <- unify ((s1 <> s' <> s) <$$> ε) ((s1 <> s' <> s) <$$> ε')
+          s3 <- unify ((s2 <> s1 <> s' <> s) <$$> εl) ((s2 <> s1 <> s' <> s) <$$> εl')
+          let sf = s3 <> s2 <> s1 <> s' <> s 
+          return
+            ( sf
+            ,   sf <$$> t
+            , ( sf <$$> ε , sf <$$> εl )
+            ) 
 {- 
-tc (Match e cs) = _ 
 tc (Handle ps ep e) = _
 -} 
 
@@ -201,7 +250,7 @@ tc (LetEff l ops e) = do
   foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
 
 tc (LetData dname params cons e) = do
-  registerDatatype dname 
+  registerDatatype (dname , fst <$> cons) 
   cons' <- mapM (declareCons dname (fst <$> params)) cons
   foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' (tc e) 
 

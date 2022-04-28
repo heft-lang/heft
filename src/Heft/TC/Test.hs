@@ -70,7 +70,21 @@ expr21 = LetData "Nat" [] [("Zero" , []) , ("Suc" , [VarT "Nat"])] (App (Var "Su
 
 expr22 = LetData "Maybe" [("a" , Star)] [("Just" , [VarT "a"]), ("Nothing" , [])] (Con "Just" [])   
 
-expr23 = LetData "Maybe" [("a" , Star)] [("Just" , [VarT "a"]), ("Nothing" , [])] (Con "Just" [Con "Nothing" []])   
+expr23 = LetData "Maybe" [("a" , Star)] [("Just" , [VarT "a"]), ("Nothing" , [])] (Con "Just" [Con "Nothing" []])
+
+expr24 = LetData "Unit" [] [("TT" , [])] (Lam "x" (Match (Var "x") [(PCon "TT" [] , Num 0)]))
+
+expr25 =
+  LetData "Maybe" [("a" , Star)] [("Just" , [VarT "a"]), ("Nothing" , [])] $
+    Letrec "maybe"
+      (Lam "f" (Lam "z" (Lam "x"
+        (Match (Var "x")
+           [ (PCon "Nothing" []      , Var "z")
+           , (PCon "Just" [PVar "y"] , App (Var "f") (Var "y"))]
+        ))))
+
+      (Var "maybe") 
+
 
 printResult :: Result -> IO ()
 printResult (Left err) = do
@@ -105,6 +119,8 @@ test =
     , expr21
     , expr22
     , expr23
+    , expr24
+    , expr25
     ]
   where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
 
