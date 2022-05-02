@@ -20,6 +20,7 @@ data TCState = TCState
   { typevarCount        :: Int
   , rowvarCount         :: Int
   , inferredConstraints :: () -- We don't use this right now, but may in the future when adding qualified types
+  , declaredEffects     :: [(String , [String])] 
   , declaredDatatypes   :: [(String , [String])]  
   }
 
@@ -56,7 +57,8 @@ runTC f = runState (runExceptT (runReaderT f emptyEnv)) (TCState
   { typevarCount        = 0
   , rowvarCount         = 0
   , inferredConstraints = mempty
-  , declaredDatatypes   = [] 
+  , declaredEffects     = []
+  , declaredDatatypes   = []
   } )
 
 runTC' :: TC a -> TCEnv -> (Either String a , TCState)
@@ -66,6 +68,7 @@ runTC' f nv = runState
     { typevarCount        = 0
     , rowvarCount         = 0
     , inferredConstraints = mempty
+    , declaredEffects     = []
     , declaredDatatypes   = [] 
     } ) 
 
@@ -114,7 +117,12 @@ generalize :: Type -> TC Scheme
 generalize t = do
   nv <- ask
   st <- get 
-  return $ generalize' t ((ftv $ typeContext nv) `Set.union` Set.fromList (fst <$> declaredDatatypes st)) (frv $ typeContext nv) 
+  return $
+    generalize' t
+      ((ftv $ typeContext nv)
+         `Set.union`
+        Set.fromList (fst <$> declaredDatatypes st))
+      (frv $ typeContext nv) 
 
 
 withEnv :: (Env Scheme -> Env Scheme) -> TC a -> TC a
@@ -130,21 +138,35 @@ mkFunT :: [Type] -> Type -> Type
 mkFunT []     u = u
 mkFunT (t:ts) u = FunT t (mkFunT ts u)
 
+registerEffect :: (String , [String]) -> TC ()
+registerEffect x = do
+  effects <- get <&> declaredEffects
+  if fst x `elem` (fst <$> effects) then
+    throwError $ "An effect with the name " ++ fst x ++ " already exists in scope"
+  else
+    modify (\st -> st { declaredEffects = (x:declaredEffects st) } )
+
 -- Declares a new operation for the effect "l" 
 declareOp :: String -> (String , String , Type , [Type]) -> TC (String , Scheme)
 declareOp l (op , r , t , args) = do
   let ft = mkFunT args (SusT t ( ConsR l (VarR r) , NilR ))
   -- TODO: when we add a global tc state with all declared effects, we'll want[
   -- to add declared operations here. For now, we just return the calculated type.
-  return (op , generalize' ft mempty mempty) 
+  datatypes <- get <&> declaredDatatypes
+  return (op , generalize' ft (Set.fromList (fst <$> datatypes)) mempty) 
 
 registerDatatype :: (String , [String]) -> TC ()
-registerDatatype x = modify (\st -> st { declaredDatatypes = (x:declaredDatatypes st) })
+registerDatatype x = do
+  datatypes <- get <&> declaredDatatypes
+  if fst x `elem` (fst <$> datatypes) then
+    throwError $ "A datatype with the name " ++ fst x ++ " already exists in scope"
+  else 
+    modify (\st -> st { declaredDatatypes = (x:declaredDatatypes st) })
   
 declareCons :: String -> [String] -> (String , [Type]) -> TC (String , Scheme)
 declareCons dname params (con , args) = do
   let cty = mkFunT args (mkAppT dname (reverse params))
-  -- TODO: we may want to add the declared constructor to a global state here 
+  -- This doesn't effect the global state in any way currently. 
   return (con , generalize' cty (Set.singleton dname) mempty)
 
   where mkAppT :: String -> [String] -> Type
@@ -159,6 +181,17 @@ checkDeclaredConstructor x = do
   else
     throwError $ x ++ " is not a constructor of any declared data type."
 
+checkDeclaredOperation :: String -> String -> TC ()
+checkDeclaredOperation op l = do 
+  effects <- get <&> declaredEffects
+  case lookup l effects of
+    (Just ops) ->
+      if op `elem` ops then
+        return ()
+      else
+        throwError $ op ++ " is not a declared operation of the effect " ++ l
+    Nothing ->
+      throwError $ "No effect with name " ++ l ++ " in scope"
 
 {- Kind checker -} 
 

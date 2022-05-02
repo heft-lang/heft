@@ -31,7 +31,7 @@ data Type = FunT Type Type
 -- variables for "syntax" typed by `a`.
 newtype Env a = Env
   { entries :: Map.Map Name a
-  } deriving Eq
+  } deriving (Eq , Show)
 
 instance Functor Env where
   fmap f (Env xs) = Env (f <$> xs)

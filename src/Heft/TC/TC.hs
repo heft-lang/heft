@@ -15,16 +15,37 @@ import Control.Monad.Reader
 
 import Debug.Trace
 
+type Bindings = Env Scheme -> Env Scheme 
 
 -- Environment "transformer" that binds a new type 
-bindT :: String -> Type -> Env Scheme -> Env Scheme
+bindT :: String -> Type -> Bindings
 bindT x t (Env xs) = Env (Map.insert x (Scheme [] [] t) xs)
 
 -- Environment "transformer" that binds a new scheme
-bindS :: String -> Scheme -> Env Scheme -> Env Scheme
+bindS :: String -> Scheme -> Bindings 
 bindS x σ (Env xs) = Env (Map.insert x σ xs) 
 
 type TCResult = (Substitution , Type , (Row , Row))
+
+returnTypeOf :: Type -> Type
+returnTypeOf (FunT _ u) = returnTypeOf u
+returnTypeOf t          = t
+
+argTypesOf :: Type -> [Type]
+argTypesOf (FunT t u) = t:argTypesOf u
+argTypesOf _          = [] 
+                                         
+unifyResults :: TCResult -> TCResult -> TC TCResult
+unifyResults (s , t , (ε , εl)) (s' , t' , (ε' , εl')) = do 
+  s1 <- unify ((s' <> s) <$$> t) ((s' <> s) <$$> t')
+  s2 <- unify ((s1 <> s' <> s) <$$> ε) ((s1 <> s' <> s) <$$> ε')
+  s3 <- unify ((s2 <> s1 <> s' <> s) <$$> εl) ((s2 <> s1 <> s' <> s) <$$> εl')
+  let sf = s3 <> s2 <> s1 <> s' <> s 
+  return
+    ( sf
+    ,   sf <$$> t
+    , ( sf <$$> ε , sf <$$> εl )
+    ) 
 
 tc :: Expr -> TC TCResult
 
@@ -123,10 +144,13 @@ tc (Con x es) = tc (mkE x (reverse es))
         mkE x []     = Var x
         mkE x (e:es) = App (mkE x es) e 
 
-
+-- TODO: current implementation doesn't do any coverage checking
 tc (Match e cs) = do
   (s , t , (ε , εl))   <- tc e
-  (_ , xs)             <- foldM (\(t, xs) clause -> tcMatchClause t clause >>= \(t' , result) -> return (t' , result:xs)) (t , []) cs 
+  (_ , xs)             <- foldM (\(t, xs) clause ->
+                                   tcMatchClause t clause
+                                     >>= \(t' , result) -> return (t' , result:xs))
+                                (t , []) cs 
   u                    <- freshT 
   foldM unifyResults (s , u , (ε , εl)) xs >>= conclude 
 
@@ -136,45 +160,76 @@ tc (Match e cs) = do
           (s2 , u , (ε , εl))    <- withEnv ((s1<$$>) . patternBindings) (tc e)
           return ((s2 <> s1) <$$> t , (s2 <> s1 , (s2 <> s1) <$$> u , (ε , εl)))
 
-        processPattern :: Type -> Pat -> TC (Substitution , Env Scheme -> Env Scheme)
+        processPattern :: Type -> Pat -> TC (Substitution , Bindings)
         processPattern t (PCon x pats) = do
           checkDeclaredConstructor x 
           σ  <- (ask <&> typeContext) >>= resolve x
           ct <- instantiate σ
           s1 <- unify t (returnTypeOf ct) 
-          (s2 , patternBindings) <- processArgPatterns (map (s1<$$>) $ argTypesOf ct) pats (mempty , id)
+          (s2 , patternBindings) <- processArgPatterns
+                                      (map (s1<$$>) $ argTypesOf ct) pats (mempty , id)
           return (s2 <> s1, patternBindings)
         processPattern t (PVar x     ) = return (mempty , bindT x t)
 
-        processArgPatterns :: [Type] -> [Pat] -> (Substitution , Env Scheme -> Env Scheme) -> TC (Substitution , Env Scheme -> Env Scheme)
+        processArgPatterns
+          :: [Type] -> [Pat] -> (Substitution , Bindings)
+           -> TC (Substitution , Bindings)
         processArgPatterns [] []           acc = return acc
         processArgPatterns (t:ts) (p:pats) acc = do
           (s , patternBindings) <- processPattern t p
           processArgPatterns ts pats (s <> fst acc , patternBindings . snd acc) 
-        processArgPatterns _      _        _ = throwError $ "Incorrect number of arguments in constructor pattern" 
+        processArgPatterns _      _        _ =
+          throwError $ "Incorrect number of arguments in constructor pattern" 
 
-        returnTypeOf :: Type -> Type
-        returnTypeOf (FunT _ u) = returnTypeOf u
-        returnTypeOf t          = t
+-- TODO: no coverage checking!  
+tc (Handle label cs e_param e) = do
+  (s1 , t_param , (ε', εl')) <- tc e_param
+  (s2 , t       , (ε , εl )) <- tc e
+  ε''                        <- freshR
+  s3                         <- unify ε (ConsR label ε'')
+  t_clause                   <- freshT 
+  let s = s3 <> s2 <> s1
+  
+  -- TODO: Knowledge about the parameter type isn't "shared" between branches.
+  -- E.g., for the state handler this means that the knowledge that the parameter must be an integer, which we learn
+  -- when typechecking the "put" branch, isn't really propagated properly.
+  --
+  -- TC for match used to have a similar problem, which was solved by propagating an updated type of the "matchee"
+  -- when typechecking the list of clauses. Could we use a similar solution here?  
+  xs                         <- mapM (tcHandleClause label (s <$$> t) (s <$$> t_clause) (s <$$> t_param) (s <$$> ε'', s <$$> εl)) cs 
+  foldM unifyResults
+    ( s
+    , SusT (s <$$> t_clause) (s <$$> ε'' , s <$$> ConsR label εl)
+    , (s <$$> ε' , s <$$> εl'))
+    xs >>= conclude
 
-        argTypesOf :: Type -> [Type]
-        argTypesOf (FunT t u) = t:argTypesOf u
-        argTypesOf _          = [] 
-                                         
-        unifyResults :: TCResult -> TCResult -> TC TCResult
-        unifyResults (s , t , (ε , εl)) (s' , t' , (ε' , εl')) = do 
-          s1 <- unify ((s' <> s) <$$> t) ((s' <> s) <$$> t')
-          s2 <- unify ((s1 <> s' <> s) <$$> ε) ((s1 <> s' <> s) <$$> ε')
-          s3 <- unify ((s2 <> s1 <> s' <> s) <$$> εl) ((s2 <> s1 <> s' <> s) <$$> εl')
-          let sf = s3 <> s2 <> s1 <> s' <> s 
-          return
-            ( sf
-            ,   sf <$$> t
-            , ( sf <$$> ε , sf <$$> εl )
-            ) 
-{- 
-tc (Handle ps ep e) = _
--} 
+  where tcHandleClause :: String -> Type -> Type -> Type -> (Row , Row) -> (CPat , Expr) -> TC TCResult
+        tcHandleClause label t t_clause t_param _ (PRet x p , e) = do
+          (s , u , ann) <- withEnv (bindT p t_param . bindT x t) (tc e)
+          return (s , s <$$> u , ann) 
+        tcHandleClause label t t_clause t_param (ε , εl) (POp op args p k , e) = do
+          checkDeclaredOperation op label 
+          σ           <- (ask <&> typeContext) >>= resolve op
+          opt         <- instantiate σ
+          argBindings <- processOpArgs (argTypesOf opt) args
+          let kt = FunT t_param (FunT (returnTypeOf opt) (SusT t_clause (ε , ConsR label εl)))
+          withEnv
+            ( bindT k kt  
+            . bindT p t_param
+            . argBindings
+            ) (tc e)  
+
+
+        processOpArgs :: [Type] -> [String] -> TC Bindings 
+        processOpArgs [] []         = return id
+        processOpArgs (t:ts) (x:xs) = do
+          bindings <- processOpArgs ts xs
+          return (bindings . bindT x t)
+        processOpArgs _      _      =
+          throwError $ "Incorrect number of arguments in operation pattern"
+          
+
+tc (Handle' _ _ _) = throwError "Internal error"  
 
 -- Operations. Defined in terms of Var/App rules 
 tc (Op x es) = tc (mkE x (reverse es))
@@ -185,7 +240,6 @@ tc (Op x es) = tc (mkE x (reverse es))
 
 
 -- (Recursive) Let bindings
--- TODO: no recursive argument is added to the environment yet
 tc (Letrec x e1 e2) = do
   t                      <- freshT 
   (s1 , t' , (ε1 , εl1)) <- withEnv (bindT x t) (tc e1)
@@ -204,7 +258,6 @@ tc (Letrec x e1 e2) = do
       , (s5 <> s4 <> s3 <> s2) <$$> εl1
       )
     ) 
-
  
 tc (BOp e1 Eq e2) = do
   (s1 , t , (ε1 , εl1)) <- tc e1
@@ -245,8 +298,9 @@ tc (BOp e1 Minus e2) = tc (BOp e1 Plus e2)
 tc (BOp e1 Times e2) = tc (BOp e1 Plus e2) 
 
 -- Effect declarations 
-tc (LetEff l ops e) = do
-  ops' <- mapM (declareOp l) ops
+tc (LetEff label ops e) = do
+  registerEffect (label , (\(op_name, _ , _ , _) -> op_name) <$> ops)  
+  ops' <- mapM (declareOp label) ops
   foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
 
 tc (LetData dname params cons e) = do

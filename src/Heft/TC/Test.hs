@@ -130,6 +130,87 @@ matchTest = mapM_ runTest
   , expr25
   ]
 
+
+hexpr1 =
+  LetEff "Abort"
+    [ ("abort" , "r" , (VarT "a") , [])
+    ] $
+  Handle "Abort"
+    [(PRet "x" "p" , Susp (BOp (Var "x") Plus (Var "p")))
+    ]
+    (Num 0)
+  (Num 1)
+
+hexpr2 =
+  LetEff "Abort"
+    [ ("abort" , "r" , (VarT "a") , [])
+    ] $
+  LetData "Maybe" [("a" , Star)]
+    [ ("Just"    , [VarT "a"])
+    , ("Nothing" , [])
+    ] $
+  Lam "n" $ 
+  Handle "Abort"
+    [(PRet "x" "p" , Susp (Con "Just" [BOp (Var "x") Plus (Var "p")]))
+    ]
+    (Var "n")
+  (Run $ Op "abort" [])
+
+hexpr3 =
+  LetEff "Abort"
+    [ ("abort" , "r" , (VarT "a") , [])
+    ] $
+  LetData "Maybe" [("a" , Star)]
+    [ ("Just"    , [VarT "a"])
+    , ("Nothing" , [])
+    ] $
+  LetData "Unit" []
+    [ ("TT" , [])
+    ] $ 
+  Run $ Handle "Abort"
+    [ (POp "abort" [] "p" "k" , Susp (Con "Nothing" [])) 
+    , (PRet "x" "p" , Susp (Con "Just" [Var "x"]))
+    ]
+    (Con "TT" [])
+  (Run $ Op "abort" [])
+
+hexpr4 =
+  LetData "Unit" []
+    [ ("TT" , [])
+    ] $
+  LetData "Pair" [("a" , Star) , ("b" , Star)]
+    [ ("MkPair" , [VarT "a",VarT "b"])
+    ] $ 
+  LetEff "State"
+    [ ("get" , "r" , NumT , [])
+    , ("put" , "r" , VarT "Unit", [NumT])
+    ] $
+  Lam "term" $ Lam "s" $ 
+  Handle "State"
+   [ (PRet "x" "s" , Susp (Con "MkPair" [Var "x", Var"s"]))
+   , (POp "get" []       "s" "k" , App (App (Var "k") (Var "s")) (Susp (Var "s")))
+   , (POp "put" ["sNew"] "s" "k" , App (App (Var "k") (Var "sNew")) (Susp (Con "TT" [])))
+   ]
+   (Var "s") $ 
+  Run (Var "term")
+
+optest =
+  LetData "Unit" []
+    [ ("TT" , [])
+    ] $
+  LetEff "State"
+    [ ("get" , "r" , NumT , [])
+    , ("put" , "r" , VarT "Unit", [NumT])
+    ] $ Run $ Op "put" [(Num 10)]
+
+handleTest = mapM_ runTest
+  [ hexpr1
+  , hexpr2
+  , hexpr3
+  , hexpr4
+  , optest
+  ]
+
 fib :: Expr
 fib =
   LetData "Nat" []
