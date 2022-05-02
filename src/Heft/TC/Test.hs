@@ -85,12 +85,14 @@ expr25 =
 
       (Var "maybe") 
 
-
 printResult :: Result -> IO ()
 printResult (Left err) = do
   putStrLn err
 printResult (Right (σ , (ε , εl))) = do
   putStrLn $ "Inferred:\t " ++ show σ ++ " | " ++ show ε ++ " * " ++ show εl 
+
+runTest :: Expr -> IO () 
+runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
 
 test :: IO ()
 test =
@@ -122,5 +124,31 @@ test =
     , expr24
     , expr25
     ]
-  where runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
 
+matchTest = mapM_ runTest
+  [ expr24
+  , expr25
+  ]
+
+fib :: Expr
+fib =
+  LetData "Nat" []
+    [("Zero" , [])
+    ,("Suc" , [VarT "Nat"])] $
+  Letrec "add"
+    (Lam "n" (Lam "m" $
+      Match (Var "n")
+        [ (PCon "Zero" []        , Var "m")
+        , (PCon "Suc" [PVar "k"] , Con "Suc" [App (App (Var "add") (Var "k")) (Var "m")])
+        ] 
+    )) $
+  Letrec "fib"
+     (Lam "n"
+       (Match (Var "n")
+        [ (PCon "Zero" []                      , Con "Zero" [])
+        , (PCon "Suc"  [PCon "Zero" []]        , Con "Suc" [Con "Zero" []])
+        , (PCon "Suc"  [PCon "Suc" [PVar "n"]] , App (App (Var "add") (Con "Suc" [Var "n"])) (Var "n"))
+        ]))
+  (Var "fib")
+  
+fibTest = runTest fib 

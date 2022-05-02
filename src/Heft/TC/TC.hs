@@ -126,24 +126,24 @@ tc (Con x es) = tc (mkE x (reverse es))
 
 tc (Match e cs) = do
   (s , t , (ε , εl))   <- tc e
-  xs                   <- mapM (tcMatchClause t) cs
+  (_ , xs)             <- foldM (\(t, xs) clause -> tcMatchClause t clause >>= \(t' , result) -> return (t' , result:xs)) (t , []) cs 
   u                    <- freshT 
-  foldM unifyResults (mempty , u , (ε , εl)) xs >>= conclude 
+  foldM unifyResults (s , u , (ε , εl)) xs >>= conclude 
 
-  where tcMatchClause :: Type -> (Pat , Expr) -> TC TCResult
+  where tcMatchClause :: Type -> (Pat , Expr) -> TC (Type , TCResult)
         tcMatchClause t (pat , e) = do
           (s1 , patternBindings) <- processPattern t pat
-          (s2 , t , (ε , εl))    <- withEnv ((s1<$$>) . patternBindings) (tc e)
-          return (s2 <> s1 , t , (ε , εl))
+          (s2 , u , (ε , εl))    <- withEnv ((s1<$$>) . patternBindings) (tc e)
+          return ((s2 <> s1) <$$> t , (s2 <> s1 , (s2 <> s1) <$$> u , (ε , εl)))
 
         processPattern :: Type -> Pat -> TC (Substitution , Env Scheme -> Env Scheme)
         processPattern t (PCon x pats) = do
           checkDeclaredConstructor x 
           σ  <- (ask <&> typeContext) >>= resolve x
           ct <- instantiate σ
-          s1 <- unify (returnTypeOf ct) t
-          (s2 , patternBindings) <- processArgPatterns (argTypesOf ct) pats (mempty , id)
-          return (s2 <> s1 , patternBindings)
+          s1 <- unify t (returnTypeOf ct) 
+          (s2 , patternBindings) <- processArgPatterns (map (s1<$$>) $ argTypesOf ct) pats (mempty , id)
+          return (s2 <> s1, patternBindings)
         processPattern t (PVar x     ) = return (mempty , bindT x t)
 
         processArgPatterns :: [Type] -> [Pat] -> (Substitution , Env Scheme -> Env Scheme) -> TC (Substitution , Env Scheme -> Env Scheme)

@@ -9,7 +9,7 @@ import Heft.Syntax.Type
 data Substitution = Substitution
  { typeSubstitutions :: Env Type
  , rowSubstitutions  :: Env Row
- }
+ } deriving (Show)
 
 
 

@@ -51,7 +51,7 @@ instance Unify Type where
     s1 <- unify t t'
     s2 <- unify (s1 <$$> u) (s1 <$$> u')
     return (s2 <> s1)
-  unify (AppT t u) (AppT u' t') = do
+  unify (AppT t u) (AppT t' u') = do
     s1 <- unify t t'
     s2 <- unify (s1 <$$> u) (s1 <$$> u')
     return (s2 <> s1)
