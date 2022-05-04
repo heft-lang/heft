@@ -1,5 +1,5 @@
 let hCatch = \ prog ->
-  handle {
+  handle catch {
   | throw p k -> Nothing
   | catch m1 m2 p k -> (k p {
       match (hCatch m1)! {
@@ -10,7 +10,7 @@ let hCatch = \ prog ->
   | return x _ -> Just x
   } Z prog! in
 let hCatch2 = \ prog ->
-  handle {
+  handle catch {
   | throw p k -> Nothing
   | catch m1 m2 p k -> (k p {
       match (hCatch2 m1)! {
@@ -22,7 +22,7 @@ let hCatch2 = \ prog ->
   | return x _ -> Just x
   } Z prog! in
 let hState = \ s0 -> \ prog ->
-  handle {
+  handle state {
   | get    s k -> (k s { s })!
   | put s' s k -> (k s' { Z })!
   | return x s -> Pair x s

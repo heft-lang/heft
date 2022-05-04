@@ -12,7 +12,8 @@ module Heft.Parser where
 import Data.Bifunctor (second)
 import Data.Char (isAlphaNum, isLower, isSpace)
 import Data.String (IsString (..))
-import Heft.AST
+import Heft.Syntax.Expr
+import Heft.Syntax.Misc
 import Text.ParserCombinators.UU hiding (pReturn)
 import Text.ParserCombinators.UU.BasicInstances hiding (Parser)
 
@@ -128,7 +129,7 @@ mapSubExpr f = \case
   Run ex -> Run (f ex)
   Con s exs -> Con s (map f exs)
   Match ex x0 -> Match (f ex) (map (second f) x0)
-  Handle x0 ex ex' -> Handle (map (second f) x0) (f ex) (f ex')
+  Handle l x0 ex ex' -> Handle l (map (second f) x0) (f ex) (f ex')
   Handle' x0 ex ex' -> Handle' (map (second f) x0) (f ex) (f ex')
   Op s exs -> Op s (map f exs)
   Letrec s ex ex' -> Letrec s (f ex) (f ex')
@@ -143,7 +144,7 @@ pExpr =
   fmap (fixApply []) $
     (Lam <$ "\\" <*> pVar <* "->" <*> pExpr <?> "Lambda")
       <|> (Letrec <$ "let" <*> pVar <* "=" <*> pExpr <* "in" <*> pExpr <?> "Let")
-      <|> (Handle <$ "handle" <*> pBraces (pList pHClause) <*> pExpr' <*> pExpr' <?> "Handle")
+      <|> (Handle <$ "handle" <*> pVar <*> pBraces (pList pHClause) <*> pExpr' <*> pExpr' <?> "Handle")
       <|> (Match <$ "match" <*> pExpr <*> pBraces (pList pMClause) <?> "Match")
       <|> foldl1 App <$> pList1_ng pExpr'
   where

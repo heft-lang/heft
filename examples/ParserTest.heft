@@ -2,7 +2,7 @@ let x = match A x y {
   | A b c -> b -- This is a comment
   | B c d -> c
 } in
-let y = \v -> \w -> handle {
+let y = \v -> \w -> handle throw {
   | throw p k -> { Nothing
   }
   |
