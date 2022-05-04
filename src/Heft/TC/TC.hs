@@ -147,9 +147,9 @@ tc (Con x es) = tc (mkE x (reverse es))
 -- TODO: current implementation doesn't do any coverage checking
 tc (Match e cs) = do
   (s , t , (ε , εl))   <- tc e
-  (_ , xs)             <- foldM (\(t, xs) clause ->
+  (_ , xs)             <- foldM (\(t, acc) clause ->
                                    tcMatchClause t clause
-                                     >>= \(t' , result) -> return (t' , result:xs))
+                                     >>= \(t' , result) -> return (t' , result:acc))
                                 (t , []) cs 
   u                    <- freshT 
   foldM unifyResults (s , u , (ε , εl)) xs >>= conclude 
@@ -189,35 +189,39 @@ tc (Handle label cs e_param e) = do
   s3                         <- unify ε (ConsR label ε'')
   t_clause                   <- freshT 
   let s = s3 <> s2 <> s1
-  
-  -- TODO: Knowledge about the parameter type isn't "shared" between branches.
-  -- E.g., for the state handler this means that the knowledge that the parameter must be an integer, which we learn
-  -- when typechecking the "put" branch, isn't really propagated properly.
-  --
-  -- TC for match used to have a similar problem, which was solved by propagating an updated type of the "matchee"
-  -- when typechecking the list of clauses. Could we use a similar solution here?  
-  xs                         <- mapM (tcHandleClause label (s <$$> t) (s <$$> t_clause) (s <$$> t_param) (s <$$> ε'', s <$$> εl)) cs 
+  (_ , xs)                         <- foldM
+                                        (\(t_param , acc) clause ->
+                                           tcHandleClause
+                                             label
+                                             (s <$$> t)
+                                             (s <$$> t_clause)
+                                             t_param
+                                             (s <$$> ε'' , s <$$> εl)
+                                             clause
+                                           >>= \(t_param' , result) -> return (t_param' , result:acc))
+                                        (t_param , []) cs 
   foldM unifyResults
     ( s
     , SusT (s <$$> t_clause) (s <$$> ε'' , s <$$> ConsR label εl)
     , (s <$$> ε' , s <$$> εl'))
     xs >>= conclude
 
-  where tcHandleClause :: String -> Type -> Type -> Type -> (Row , Row) -> (CPat , Expr) -> TC TCResult
+  where tcHandleClause :: String -> Type -> Type -> Type -> (Row , Row) -> (CPat , Expr) -> TC (Type , TCResult)
         tcHandleClause label t t_clause t_param _ (PRet x p , e) = do
           (s , u , ann) <- withEnv (bindT p t_param . bindT x t) (tc e)
-          return (s , s <$$> u , ann) 
+          return (s <$$> t_param , (s , s <$$> u , ann)) 
         tcHandleClause label t t_clause t_param (ε , εl) (POp op args p k , e) = do
           checkDeclaredOperation op label 
           σ           <- (ask <&> typeContext) >>= resolve op
           opt         <- instantiate σ
           argBindings <- processOpArgs (argTypesOf opt) args
           let kt = FunT t_param (FunT (returnTypeOf opt) (SusT t_clause (ε , ConsR label εl)))
-          withEnv
-            ( bindT k kt  
-            . bindT p t_param
-            . argBindings
-            ) (tc e)  
+          (s , u , ann) <- withEnv
+                           ( bindT k kt  
+                           . bindT p t_param
+                           . argBindings
+                           ) (tc e)
+          return (s <$$> t_param , (s , s <$$> u , ann))
 
 
         processOpArgs :: [Type] -> [String] -> TC Bindings 
