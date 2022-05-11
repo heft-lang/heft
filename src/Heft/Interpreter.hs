@@ -1,5 +1,6 @@
 module Heft.Interpreter where
 
+import Heft.Syntax.Misc
 import Heft.Syntax.Expr
 import Debug.Trace
 
@@ -96,7 +97,7 @@ decompose (Con f es)                  c = case es of
   []     -> decompose_aux c (VCon f [])
   (e:es) -> decompose e (CtxCon f [] c es)
 decompose (Match e pes)               c = decompose e (CtxMatch c pes)
-decompose (Handle cases ep e)         c = RD c (PRHandle cases ep e)
+decompose (Handle _label cases ep e)  c = RD c (PRHandle cases ep e)
 decompose (Handle' cases ep e)        c = decompose ep (CtxHandle0 cases c e)
 decompose (Op f esv)                  c = case esv of
   []     -> RD c (PROp f [])
@@ -175,11 +176,11 @@ subst (Con c es)     v x = Con c (map (\ e -> subst e v x) es)
 subst (Match e pes)  v x = Match (subst e v x) (map (\ (p, e) ->
                                                       if elem x (bindingsOfPat p) then (p, e)
                                                       else (p, subst e v x)) pes)
-subst (Handle cases e1 e2) v x = Handle (map (\ (p,e) ->
-                                                if elem x (bindingsOfCPat p) then (p, e)
-                                                else (p, subst e v x)) cases)
-                                        (subst e1 v x)
-                                        (subst e2 v x)
+subst (Handle label cases e1 e2) v x = Handle label (map (\ (p,e) ->
+                                                            if elem x (bindingsOfCPat p) then (p, e)
+                                                            else (p, subst e v x)) cases)
+                                                    (subst e1 v x)
+                                                    (subst e2 v x)
 subst (Handle' cases e1 e2) v x = Handle' (map (\ (p,e) ->
                                                   if elem x (bindingsOfCPat p) then (p, e)
                                                   else (p, subst e v x)) cases)
@@ -231,10 +232,10 @@ freshE (Match e pes) x = foldr (\ (p, e) x -> if (elem x (bindingsOfPat p)) then
                                               else freshE e x)
                                (freshE e x)
                                pes
-freshE (Handle cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p)) then freshE e ("." ++ x)
-                                                    else freshE e x)
-                                     (freshE e (freshE ep x))
-                                     cases
+freshE (Handle _label cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p)) then freshE e ("." ++ x)
+                                                           else freshE e x)
+                                            (freshE e (freshE ep x))
+                                            cases
 freshE (Handle' cases ep e) x = foldr (\ (p, e) x -> if (elem x (bindingsOfCPat p)) then freshE e ("." ++ x)
                                                      else freshE e x)
                                       (freshE e (freshE ep x))
