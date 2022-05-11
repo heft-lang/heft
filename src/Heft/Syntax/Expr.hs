@@ -39,7 +39,33 @@ patcase ::= pcon x p* | pvar x
 data BinOp = Eq | Plus | Minus | Times
   deriving Show
 
-data Expr = V Val
+{-
+type Program = [Decl]
+
+data Decl = DDecl ...
+          | EDecl ...
+          | FDecl Name (Maybe Type) [Pat] Expr 
+-} 
+
+
+newtype Program = Program { decls :: [Decl] }
+
+data Decl = Function Name (Maybe Type) [Pat] Expr          
+          | Datatype Name
+              [(Name , Kind)]   -- Parameters 
+              [ ( Name          -- constructor name 
+                , [Type]        -- Argument Types
+                )
+              ] Expr
+          | Effect Name
+              [ ( Name                 -- op name 
+                , (Name , Name , Name) -- reserved row names 
+                , Type                 -- Return Type 
+                , [Type]               -- Argument Types 
+                )
+              ] Expr
+
+data Expr = V Val      -- Internal syntax     
           | Num Int
           | Lam String Expr
           | Var String
@@ -53,25 +79,6 @@ data Expr = V Val
           | Op Name [Expr]
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr
-
-          -- Declares a new effect and its operations
-          | LetEff Name
-              [ ( Name   -- op name 
-                , Name   -- variable that refers to the effect "remainder" 
-                , Type   -- Return Type 
-                , [Type] -- Argument Types 
-                )
-              ] Expr
-
-          -- Declares a new data type 
-          | LetData Name
-              [(Name , Kind)]   -- Parameters 
-              [ ( Name          -- constructor name 
-                , [Type]        -- Argument Types
-                )
-              ] Expr 
-          
-          
           
   deriving Show
 
@@ -96,6 +103,7 @@ instance Show Val where -- built-in support for list  show (VLam x e) = "(λ " +
   show (VCon "[]" []) = "[]"
   show (VCon "::" [h,t]) = show h ++ " :: " ++ show t
   show (VCon "," [a,b]) = "(" ++ show a ++ ", " ++ show b ++ ")"
+  
   show (VCon f []) = f
   show (VCon f vs) = "(" ++ f ++ " " ++ unwords (map show' vs) ++ ")"
 
@@ -116,5 +124,5 @@ namesOf (PRet _ _) = []
 namesOf (POp f _ _ _) = [f]
 
 bindingsOfCPat :: CPat -> [String]
-bindingsOfCPat (PRet x p) = [x,p]
+bindingsOfCPat (PRet x p)       = [x,p]
 bindingsOfCPat (POp _ xs xp xk) = xs ++ [xp, xk]
