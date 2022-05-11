@@ -299,18 +299,30 @@ tc (BOp e1 Plus e2) = do
 
 tc (BOp e1 Minus e2) = tc (BOp e1 Plus e2) 
 
-tc (BOp e1 Times e2) = tc (BOp e1 Plus e2) 
+tc (BOp e1 Times e2) = tc (BOp e1 Plus e2)
+
+tc (Ann e σ) = do
+  (s , σ' , ea) <- tc e
+  
+  return (s , σ' , ea) 
+
+tcDecl :: Decl -> TC TCResult
 
 -- Effect declarations 
-tc (LetEff label ops e) = do
+tcDecl (Effect label ops e) = do
   registerEffect (label , (\(op_name, _ , _ , _) -> op_name) <$> ops)  
   ops' <- mapM (declareOp label) ops
   foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
 
-tc (LetData dname params cons e) = do
+tcDecl (Datatype dname params cons e) = do
   registerDatatype (dname , fst <$> cons) 
   cons' <- mapM (declareCons dname (fst <$> params)) cons
   foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' (tc e) 
+
+tcDecl (Function fname sig pats e) = undefined
+
+tcProgram :: Program -> TC [TCResult]
+tcProgram = mapM tcDecl . decls
 
 type Result = Either String (Scheme , (Row , Row)) 
 
@@ -320,4 +332,3 @@ infer :: Expr -> Result
 infer e = (\(σ , ann) -> (normalizeAlpha σ , normalizeAnn ann))  <$> 
   ( fst $ runTC $
       tc e >>= \(s , t , ann) -> generalize (apply s t) >>= \σ -> return (σ , ann))
-
