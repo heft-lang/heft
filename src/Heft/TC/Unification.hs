@@ -85,3 +85,10 @@ instance Unify Row where
     "Unification failed for rows "
     <> show r1 <> " , " <> show r2
 
+isInstanceOf :: Type -> Type -> TC ()
+isInstanceOf t u = do
+  s <- unify t u
+  case (normalizeAlpha (Scheme [] [] t)) == (normalizeAlpha (Scheme [] [](s <$$> u))) of
+    True   -> return ()
+    False  -> throwError $ "The type " ++ show t ++ " doesn't instantiate " ++ show u
+

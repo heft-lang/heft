@@ -147,8 +147,8 @@ registerEffect x = do
     modify (\st -> st { declaredEffects = (x:declaredEffects st) } )
 
 -- Declares a new operation for the effect "l" 
-declareOp :: String -> (String , String , Type , [Type]) -> TC (String , Scheme)
-declareOp l (op , r , t , args) = do
+declareOp :: String -> (String , (String , String , String) , Type , [Type]) -> TC (String , Scheme)
+declareOp l (op , (r , ri , rl) , t , args) = do
   let ft = mkFunT args (SusT t ( ConsR l (VarR r) , NilR ))
   -- TODO: when we add a global tc state with all declared effects, we'll want[
   -- to add declared operations here. For now, we just return the calculated type.

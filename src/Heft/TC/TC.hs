@@ -1,7 +1,8 @@
 module Heft.TC.TC where
 
 import Data.Functor 
-import qualified Data.Map as Map 
+import qualified Data.Map as Map
+import qualified Data.Set as Set 
 
 import Heft.Syntax.Type
 import Heft.Syntax.Expr
@@ -302,9 +303,14 @@ tc (BOp e1 Minus e2) = tc (BOp e1 Plus e2)
 tc (BOp e1 Times e2) = tc (BOp e1 Plus e2)
 
 tc (Ann e σ) = do
-  (s , σ' , ea) <- tc e
-  
-  return (s , σ' , ea) 
+  (s , t , ea) <- tc e
+  if not ((ftv σ) == Set.empty) then
+    throwError $ "Cannot annotate with " ++ show σ ++ ", because it contains free type variable(s)"
+  else
+    do σ'           <- generalize t 
+       u            <- instantiate σ
+       u `isInstanceOf` t 
+       return (s , u , ea) 
 
 tcDecl :: Decl -> TC TCResult
 
@@ -332,3 +338,6 @@ infer :: Expr -> Result
 infer e = (\(σ , ann) -> (normalizeAlpha σ , normalizeAnn ann))  <$> 
   ( fst $ runTC $
       tc e >>= \(s , t , ann) -> generalize (apply s t) >>= \σ -> return (σ , ann))
+
+check :: Expr -> Scheme -> Result
+check e σ = infer (Ann e σ)

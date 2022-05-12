@@ -29,6 +29,7 @@ expr8  = Letrec "enact" (Lam "x" (Run (Var "x"))) (Var "enact")
 
 expr9  = Letrec "enact" (Lam "x" (Susp (Run (Var "x")))) (Var "enact") 
 
+{-
 expr10 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Op "abort" [])
 expr11 = LetEff "Abort" [("abort" , "r" , (VarT "a") , [])] (Run $ Op "abort" [])
 
@@ -84,6 +85,7 @@ expr25 =
         ))))
 
       (Var "maybe") 
+-}
 
 printResult :: Result -> IO ()
 printResult (Left err) = do
@@ -94,6 +96,7 @@ printResult (Right (σ , (ε , εl))) = do
 runTest :: Expr -> IO () 
 runTest e = putStrLn ("Term:\t\t " ++ show e) >> printResult (infer e) >> putStr "\n" 
 
+{-
 test :: IO ()
 test =
   mapM_ runTest
@@ -129,8 +132,8 @@ matchTest = mapM_ runTest
   [ expr24
   , expr25
   ]
-
-
+-}
+{-
 hexpr1 =
   LetEff "Abort"
     [ ("abort" , "r" , (VarT "a") , [])
@@ -193,7 +196,8 @@ hexpr4 =
    ]
    (Var "s") $ 
   Run (Var "term")
-
+-}
+{-
 optest =
   LetData "Unit" []
     [ ("TT" , [])
@@ -210,6 +214,7 @@ handleTest = mapM_ runTest
   , hexpr4
   , optest
   ]
+
 
 fib :: Expr
 fib =
@@ -231,5 +236,16 @@ fib =
         , (PCon "Suc"  [PCon "Suc" [PVar "n"]] , App (App (Var "add") (Con "Suc" [Var "n"])) (Var "n"))
         ]))
   (Var "fib")
+-}
+
+--fibTest = runTest fib 
+
+aexpr1 = Ann (Lam "x" (Var "x")) (Scheme [] [] $ FunT NumT NumT)
+aexpr2 = Ann (Lam "x" (Var "x")) (Scheme ["a","b"] [] $ FunT (FunT (VarT "a") (VarT "b")) (FunT (VarT "a") (VarT "b")))
+aexpr3 = Ann (Lam "x" (Var "x")) (Scheme ["a","b"] [] $ FunT (VarT "a") (VarT "b"))
   
-fibTest = runTest fib 
+annTest = mapM_ runTest
+  [ aexpr1
+  , aexpr2
+  , aexpr3
+  ]

@@ -79,6 +79,7 @@ data Expr = V Val      -- Internal syntax
           | Op Name [Expr]
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr
+          | Ann Expr Scheme 
           
   deriving Show
 
