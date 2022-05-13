@@ -1,5 +1,5 @@
 hCatch = \ prog ->
-  handle catch {
+  handle Catch {
   | throw p k -> { Nothing }
   | catch m1 m2 p k -> k p {
       match (hCatch m1)! {
@@ -11,7 +11,7 @@ hCatch = \ prog ->
   } Z prog!
 
 hCatch2 = \ prog ->
-  handle catch {
+  handle Catch {
   | throw p k -> { Nothing }
   | catch m1 m2 p k -> k p {
       match (hCatch2 m1)! {
@@ -24,7 +24,7 @@ hCatch2 = \ prog ->
   } Z prog!
 
 hState = \ s0 -> \ prog ->
-  handle state {
+  handle State {
   | get    s k -> k s { s }
   | put s' s k -> k s' { Z }
   | return x s -> { Pair x s }

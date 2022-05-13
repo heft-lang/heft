@@ -5,7 +5,7 @@ x =
   }
 
 y = \v -> \w ->
-  handle throw {
+  handle Throw {
     | throw p k -> { Nothing
     }
     |

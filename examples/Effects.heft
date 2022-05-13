@@ -8,7 +8,7 @@ effect Reader {
 }
 
 main = 
-  (handle reader {
+  (handle Reader {
     | ask p k -> k p { S Z }
     | return x p -> { x }
   } Z `ask)!

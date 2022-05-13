@@ -186,7 +186,7 @@ pExpr =
   fmap (fixApply []) $
     (Lam <$ "\\" <*> pVar <* "->" <*> pExpr <?> "Lambda")
       <|> (Letrec <$ "let" <*> pVar <* "=" <*> pExpr <* "in" <*> pExpr <?> "Let")
-      <|> (Handle <$ "handle" <*> pVar <*> pBraces (pList pHClause) <*> pExpr' <*> pExpr' <?> "Handle")
+      <|> (Handle <$ "handle" <*> pCon <*> pBraces (pList pHClause) <*> pExpr' <*> pExpr' <?> "Handle")
       <|> (Match <$ "match" <*> pExpr <*> pBraces (pList pMClause) <?> "Match")
       <|> foldl1 App <$> pList1_ng pExpr'
   where
