@@ -1,2 +1,3 @@
-let f = \x -> Z in
-id f Z
+main =
+  let f = \x -> Z in
+  id f Z

@@ -1,7 +1,9 @@
 module Main where
 
 import Heft.Interpreter (eval)
-import Heft.Parser (pExpr, runParser)
+import Heft.Parser (pProgram, runParser)
+import Heft.Util (letify)
+import Heft.Syntax.Expr (Expr (Var))
 import System.Environment (getArgs)
 
 main :: IO ()
@@ -12,8 +14,8 @@ main = do
 runFile :: String -> IO ()
 runFile x = do
   xs <- readFile x
-  let expr = runParser x pExpr xs
+  let prog = runParser x pProgram xs
   putStrLn "Parsed Expression:"
-  print expr
+  print prog
   putStrLn "Result Value:"
-  print (eval expr)
+  print (eval (letify prog (Var "main")))

@@ -13,7 +13,7 @@ import Data.Bifunctor (second)
 import Data.Char (isAlphaNum, isLower, isSpace)
 import Data.String (IsString (..))
 import Heft.Syntax.Expr
-import Heft.Syntax.Misc
+import Heft.Syntax.Type
 import Text.ParserCombinators.UU hiding (pReturn)
 import Text.ParserCombinators.UU.BasicInstances hiding (Parser)
 
@@ -48,9 +48,9 @@ execParser p = parse_h ((,) <$ whitespace <*> p <*> pEnd) . createStr (LineColPo
 runParser :: String -> Parser a -> String -> a
 runParser inputName p str
   | (a, b) <- execParser p str =
-    if null b
-      then a
-      else error (unlines ["Failed parsing '" ++ inputName ++ "' :", pruneError str b])
+      if null b
+        then a
+        else error (unlines ["Failed parsing '" ++ inputName ++ "' :", pruneError str b])
   where
     -- We do 'pruneError' above because otherwise you can end
     -- up reporting huge correction streams, and that's
@@ -65,10 +65,10 @@ runParser inputName p str
     prettyError :: String -> [String] -> LineColPos -> String
     prettyError s expect lcp@(LineColPos _ _ pos) =
       unlines
-        [ "Parser error" ++ show_expecting lcp expect ++ ":"
-        , aboveString
-        , inputFrag
-        , belowString
+        [ "Parser error" ++ show_expecting lcp expect ++ ":",
+          aboveString,
+          inputFrag,
+          belowString
         ]
       where
         s' = map (\c -> if c == '\n' || c == '\r' || c == '\t' then ' ' else c) s
@@ -81,17 +81,35 @@ pCon = lexeme $ ((:) <$> pRange ('A', 'Z') <*> pMunch (\c -> isAlphaNum c || c =
 pOp = lexeme $ (:) <$ pSym '`' <*> pRange ('a', 'z') <*> pMunch (\c -> isAlphaNum c || c == '_' || c == '\'') <?> "Operation"
 
 keywords :: [String]
-keywords = ["let", "in", "match", "return"]
+keywords = ["let", "in", "match", "return", "data", "effect", "handle"]
+
+pIdent :: Parser String
+pIdent = lexeme $ pSymExt splitState (Succ Zero) Nothing <?> "Identifier"
+  where
+    splitState :: (String -> Str Char String LineColPos -> Steps a) -> Str Char String LineColPos -> Steps a
+    splitState k inp@(Str (x : xs) msgs pos del_ok)
+      | (l, r) <- span (\c -> isAlphaNum c || c == '_' || c == '\'') xs,
+        l /= "",
+        l `notElem` keywords =
+          Step (length (x : l)) (k (x : l) (Str r msgs (advance pos (x : l)) del_ok))
+    splitState k inp@(Str tts msgs pos del_ok) =
+      let msg = "Identifier"
+          ins exp = (1, k "x" (Str tts (msgs ++ [Inserted msg pos exp]) pos False))
+       in case tts of
+            [] -> Fail [msg] [ins]
+            t : ts ->
+              let del exp = (5, splitState k (Str ts (msgs ++ [Deleted (show t) pos exp]) (advance pos t) True))
+               in Fail [msg] (ins : [del | del_ok])
 
 pVar :: Parser String
 pVar = lexeme $ pSymExt splitState (Succ Zero) Nothing <?> "Variable"
   where
     splitState :: (String -> Str Char String LineColPos -> Steps a) -> Str Char String LineColPos -> Steps a
     splitState k inp@(Str (x : xs) msgs pos del_ok)
-      | isLower x || x == '_'
-        , (l, r) <- span (\c -> isAlphaNum c || c == '_' || c == '\'') xs
-        , x : l `notElem` keywords =
-        Step (length (x : l)) (k (x : l) (Str r msgs (advance pos (x : l)) del_ok))
+      | isLower x || x == '_',
+        (l, r) <- span (\c -> isAlphaNum c || c == '_' || c == '\'') xs,
+        x : l `notElem` keywords =
+          Step (length (x : l)) (k (x : l) (Str r msgs (advance pos (x : l)) del_ok))
     splitState k inp@(Str tts msgs pos del_ok) =
       let msg = "Variable"
           ins exp = (1, k "x" (Str tts (msgs ++ [Inserted msg pos exp]) pos False))
@@ -135,9 +153,33 @@ mapSubExpr f = \case
   Letrec s ex ex' -> Letrec s (f ex) (f ex')
   BOp ex bo ex' -> BOp (f ex) bo (f ex')
 
-pBraces, pParens :: Parser a -> Parser a
+pBraces, pParens, pAngles :: Parser a -> Parser a
 pBraces p = "{" *> p <* "}"
 pParens p = "(" *> p <* ")"
+pAngles p = "<" *> p <* ">"
+
+pKind :: Parser Kind
+pKind = pChainr (FunK <$ "->") (Star <$ "*" <|> RowK <$ "R" <|> pParens pKind)
+
+pRow :: Parser Row
+pRow = pAngles (pure NilR) <|> pAngles (ConsR <$> pCon <* "," <*> pRow) <|> VarR <$> pVar
+
+pType :: Parser Type
+pType = pChainr (FunT <$ "->") (foldl1 AppT <$> pList1 pTypeInner)
+
+pTypeInner :: Parser Type
+pTypeInner = VarT <$> pIdent <|> NumT <$ "Num" <|> BoolT <$ "Bool" <|> pSus
+  where
+    pSus = pBraces (SusT <$> pType <* "|" <*> ((,) <$> pRow <* "*" <*> pRow))
+
+pProgram :: Parser Program
+pProgram = Program <$> pList pDecl
+
+pDecl :: Parser Decl
+pDecl =
+  (Effect <$ "effect" <*> pCon <*> pBraces (pList pEClause) <?> "Effect Declaration")
+    <|> (Datatype <$ "data" <*> pCon <*> pList (pParens ((,) <$> pVar <* ":" <*> pKind)) <*> pBraces (pList pDClause) <?> "Data Declaration")
+    <|> (Function <$> pVar <*> pure Nothing <*> pList pPatInner <* "=" <*> pExpr <?> "Function Declaration")
 
 pExpr :: Parser Expr
 pExpr =
@@ -188,7 +230,21 @@ pMClause = (,) <$ "|" <*> pPat <* "->" <*> pExpr <?> "Match Case"
 
 -- Match patterns
 pPat :: Parser Pat
-pPat = (PCon <$> pCon <*> pList pPat' <?> "Constructor Pattern") <|> pPat'
+pPat = (PCon <$> pCon <*> pList pPatInner <?> "Constructor Pattern") <|> pPatInner
+
+-- Here we again split the parser into two parts, see the explanation of this in 'pExpr'
+pPatInner :: Parser Pat
+pPatInner = (PVar <$> pVar <?> "Variable Pattern") <|> pParens pPat
+
+-- Effect declaration clauses
+pEClause :: Parser (String, (String, String, String), Type, [Type])
+pEClause = (\n (r, t, args) -> (n, r, t, args)) <$ "|" <*> pVar <* ":" <*> (opSig <$> pType)
   where
-    -- Here we again split the parser into two parts, see the explanation of this in 'pExpr'
-    pPat' = (PVar <$> pVar <?> "Variable Pattern") <|> pParens pPat
+    opSig :: Type -> ((String, String, String), Type, [Type])
+    opSig (FunT x xs) = let (r, t, args) = opSig xs in (r, t, x : args)
+    opSig (SusT t (ConsR _ (VarR r), NilR)) = ((r, "TODO", "TODO"), t, [])
+    opSig _ = error "pEClause: malformed operation signature"
+
+-- Data declaration clauses
+pDClause :: Parser (String, [Type])
+pDClause = (,) <$ "|" <*> pCon <*> pList pTypeInner

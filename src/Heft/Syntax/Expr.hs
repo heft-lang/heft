@@ -49,6 +49,7 @@ data Decl = DDecl ...
 
 
 newtype Program = Program { decls :: [Decl] }
+  deriving Show
 
 data Decl = Function Name (Maybe Type) [Pat] Expr          
           | Datatype Name
@@ -56,14 +57,15 @@ data Decl = Function Name (Maybe Type) [Pat] Expr
               [ ( Name          -- constructor name 
                 , [Type]        -- Argument Types
                 )
-              ] Expr
+              ]
           | Effect Name
               [ ( Name                 -- op name 
                 , (Name , Name , Name) -- reserved row names 
                 , Type                 -- Return Type 
                 , [Type]               -- Argument Types 
                 )
-              ] Expr
+              ]
+  deriving Show
 
 data Expr = V Val      -- Internal syntax     
           | Num Int
@@ -80,7 +82,6 @@ data Expr = V Val      -- Internal syntax
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr
           | Ann Expr Scheme 
-          
   deriving Show
 
 data Pat = PCon String [Pat]

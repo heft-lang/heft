@@ -1,12 +1,40 @@
-let add = \x -> \y -> 
+-- fib :: Expr
+-- fib =
+--   LetData "Nat" []
+--     [("Zero" , [])
+--     ,("Suc" , [VarT "Nat"])] $
+--   Letrec "add"
+--     (Lam "n" (Lam "m" $
+--       Match (Var "n")
+--         [ (PCon "Zero" []        , Var "m")
+--         , (PCon "Suc" [PVar "k"] , Con "Suc" [App (App (Var "add") (Var "k")) (Var "m")])
+--         ] 
+--     )) $
+--   Letrec "fib"
+--      (Lam "n"
+--        (Match (Var "n")
+--         [ (PCon "Zero" []                      , Con "Zero" [])
+--         , (PCon "Suc"  [PCon "Zero" []]        , Con "Suc" [Con "Zero" []])
+--         , (PCon "Suc"  [PCon "Suc" [PVar "n"]] , App (App (Var "add") (Con "Suc" [Var "n"])) (Var "n"))
+--         ]))
+--   (Var "fib")
+
+data Nat {
+  | Z
+  | S Nat
+}
+
+add = \x -> \y -> 
   match x {
   | S z -> S (add z y)
-  | Z -> y } in
-let fib = \x ->
+  | Z -> y }
+
+fib = \x ->
   match x {
   | S y -> 
     match y {
     | S z -> add (fib y) (fib z)
     | Z -> x }
-  | Z -> x } in
-fib (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S Z)))))))))))))))))))
+  | Z -> x }
+
+main = fib (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S Z)))))))))))))))))))

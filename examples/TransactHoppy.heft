@@ -1,4 +1,4 @@
-let hCatch = \ prog ->
+hCatch = \ prog ->
   handle catch {
   | throw p k -> { Nothing }
   | catch m1 m2 p k -> k p {
@@ -8,8 +8,9 @@ let hCatch = \ prog ->
       }
     }
   | return x _ -> { Just x }
-  } Z prog! in
-let hCatch2 = \ prog ->
+  } Z prog!
+
+hCatch2 = \ prog ->
   handle catch {
   | throw p k -> { Nothing }
   | catch m1 m2 p k -> k p {
@@ -20,19 +21,23 @@ let hCatch2 = \ prog ->
     }
   | abort m p k -> m
   | return x _ -> { Just x }
-  } Z prog! in
-let hState = \ s0 -> \ prog ->
+  } Z prog!
+
+hState = \ s0 -> \ prog ->
   handle state {
   | get    s k -> k s { s }
   | put s' s k -> k s' { Z }
   | return x s -> { Pair x s }
-  } s0 prog! in
-let transact = {
+  } s0 prog!
+
+transact = {
   let _ = `put (S Z) in
   let _ = `catch { let _ = `put (S (S Z)) in `throw } { Z } in
   `get
-} in
-Tuple (hCatch (hState Z transact))!
-      (hState Z (hCatch transact))!
-      (hCatch2 (hState Z transact))! -- interaction!
-      (hState Z (hCatch2 transact))!
+}
+
+main = 
+  Tuple (hCatch (hState Z transact))!
+        (hState Z (hCatch transact))!
+        (hCatch2 (hState Z transact))! -- interaction!
+        (hState Z (hCatch2 transact))!
