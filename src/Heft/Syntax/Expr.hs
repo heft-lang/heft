@@ -109,6 +109,8 @@ instance Show Val where -- built-in support for list  show (VLam x e) = "(λ " +
   show (VCon f []) = f
   show (VCon f vs) = "(" ++ f ++ " " ++ unwords (map show' vs) ++ ")"
 
+  show (VLam x e) = "(\\" ++ x ++ " -> " ++ show e ++ ")"
+
 show' :: Val -> [Char]
 show' v@(VCon "::" [_, _]) = "(" ++ show v ++ ")"
 show' v = show v

@@ -1,0 +1,19 @@
+data Nat
+| Z
+| S Nat
+
+effect Error
+| throw : b -> { a / <Error, r> * <> }
+| catch : { a / <Error, r> * <> } -> { a / <Error, r> * <> } -> { a / <Error, r> * <> }
+
+data Either (a : *) (b : *)
+| Left a
+| Right b
+
+val runError = \prog ->
+  handle Error
+  | throw x _ k -> Left x
+  | return x _ -> Right x
+  end U prog!
+
+val main = (runError {`throw (S Z)})!

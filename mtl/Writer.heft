@@ -1,0 +1,21 @@
+data U
+| U
+
+data Nat
+| Z
+| S Nat
+
+data List (a : *)
+| Nil
+| Cons a (List a)
+
+effect Writer
+| tell : w -> { U / <Writer, r> * <> }
+
+val runWriter = \prog ->
+  handle Writer
+  | tell x w k -> (k (\xs -> w (Cons x xs)) { U })!
+  | return x w -> Tuple x (w Nil)
+  end (\xs -> xs) prog!
+
+val main = (runWriter {let _ = `tell Z in `tell (S Z)})!

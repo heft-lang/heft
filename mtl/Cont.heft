@@ -1,0 +1,41 @@
+data U
+| U
+
+data Nat
+| Z
+| S Nat
+
+data Result
+| ForgotName
+| Welcome
+
+data List
+| Nil
+| Cons Nat List
+
+effect Cont
+| callCC : ((a -> { b / <Cont, r> * <> }) -> { a / <Cont, r> * <> }) -> { a / <Cont, r> * <> }
+| exit : a -> { a / <Cont, r> * <> }
+
+val runCont = \prog ->
+  handle Cont
+    | callCC f _ k -> (k U (f (\x -> { `exit x })))!
+    | exit m _ k -> m
+    | return x _ -> x
+  end U prog!
+
+val whatsYourName = \name -> {
+  `callCC (\exit -> {
+    let _ =
+      match name
+      | Nil -> (exit ForgotName)!
+      | Cons _ _ -> U
+      end in
+    Welcome 
+    })
+}
+
+val main =
+  let x = (runCont (whatsYourName Nil))! in
+  let y = (runCont (whatsYourName (Cons Z Nil)))! in
+  Tuple x y

@@ -10,7 +10,7 @@
 module Heft.Parser where
 
 import Data.Bifunctor (second)
-import Data.Char (isAlphaNum, isLower, isSpace)
+import Data.Char (isAlphaNum, isLower, isSpace, isAlpha)
 import Data.String (IsString (..))
 import Heft.Syntax.Expr
 import Heft.Syntax.Type
@@ -29,7 +29,7 @@ lexeme p = p <* whitespace
 -- Here we specify that our language uses Haskell-like '--' syntax for line comments
 whitespace :: Parser ()
 whitespace =
-  () <$ pList ((pToken "--" *> pMunch (/= '\n') <?> "Line Comment") <|> (pSatisfy isSpace (Insertion "Space" ' ' 5) *> pMunch isSpace))
+  () <$ pList ((pToken "--" *> pMunch (/= '\n') <?> "") <|> (pSatisfy isSpace (Insertion "" ' ' 5) *> pMunch isSpace))
 
 -- We define an instance of IsString so that we can write literal strings to mean parsers that parse exactly those literal strings.
 instance (a ~ String) => IsString (Parser a) where
@@ -81,7 +81,7 @@ pCon = lexeme $ ((:) <$> pRange ('A', 'Z') <*> pMunch (\c -> isAlphaNum c || c =
 pOp = lexeme $ (:) <$ pSym '`' <*> pRange ('a', 'z') <*> pMunch (\c -> isAlphaNum c || c == '_' || c == '\'') <?> "Operation"
 
 keywords :: [String]
-keywords = ["let", "in", "match", "return", "data", "effect", "handle"]
+keywords = ["let", "in", "match", "return", "data", "effect", "handle", "val", "fun", "end"]
 
 pIdent :: Parser String
 pIdent = lexeme $ pSymExt splitState (Succ Zero) Nothing <?> "Identifier"
@@ -89,8 +89,8 @@ pIdent = lexeme $ pSymExt splitState (Succ Zero) Nothing <?> "Identifier"
     splitState :: (String -> Str Char String LineColPos -> Steps a) -> Str Char String LineColPos -> Steps a
     splitState k inp@(Str (x : xs) msgs pos del_ok)
       | (l, r) <- span (\c -> isAlphaNum c || c == '_' || c == '\'') xs,
-        l /= "",
-        l `notElem` keywords =
+        isAlpha x || x == '_' || x == '\'',
+        x : l `notElem` keywords =
           Step (length (x : l)) (k (x : l) (Str r msgs (advance pos (x : l)) del_ok))
     splitState k inp@(Str tts msgs pos del_ok) =
       let msg = "Identifier"
@@ -168,26 +168,26 @@ pType :: Parser Type
 pType = pChainr (FunT <$ "->") (foldl1 AppT <$> pList1 pTypeInner)
 
 pTypeInner :: Parser Type
-pTypeInner = VarT <$> pIdent <|> NumT <$ "Num" <|> BoolT <$ "Bool" <|> pSus
+pTypeInner = VarT <$> pIdent <|> NumT <$ "Num" <|> BoolT <$ "Bool" <|> pSus <|> pParens pType
   where
-    pSus = pBraces (SusT <$> pType <* "|" <*> ((,) <$> pRow <* "*" <*> pRow))
+    pSus = pBraces (SusT <$> pType <* "/" <*> ((,) <$> pRow <* "*" <*> pRow))
 
 pProgram :: Parser Program
 pProgram = Program <$> pList pDecl
 
 pDecl :: Parser Decl
 pDecl =
-  (Effect <$ "effect" <*> pCon <*> pBraces (pList pEClause) <?> "Effect Declaration")
-    <|> (Datatype <$ "data" <*> pCon <*> pList (pParens ((,) <$> pVar <* ":" <*> pKind)) <*> pBraces (pList pDClause) <?> "Data Declaration")
-    <|> (Function <$> pVar <*> pure Nothing <*> pList pPatInner <* "=" <*> pExpr <?> "Function Declaration")
+  (Effect <$ "effect" <*> pCon <*> pList pEClause <?> "Effect Declaration")
+    <|> (Datatype <$ "data" <*> pCon <*> pList (pParens ((,) <$> pVar <* ":" <*> pKind)) <*> pList pDClause <?> "Data Declaration")
+    <|> (Function <$ "val" <*> pVar <*> pure Nothing <*> pure [] <* "=" <*> pExpr <?> "Value Declaration")
 
 pExpr :: Parser Expr
 pExpr =
   fmap (fixApply []) $
     (Lam <$ "\\" <*> pVar <* "->" <*> pExpr <?> "Lambda")
       <|> (Letrec <$ "let" <*> pVar <* "=" <*> pExpr <* "in" <*> pExpr <?> "Let")
-      <|> (Handle <$ "handle" <*> pCon <*> pBraces (pList pHClause) <*> pExpr' <*> pExpr' <?> "Handle")
-      <|> (Match <$ "match" <*> pExpr <*> pBraces (pList pMClause) <?> "Match")
+      <|> (Handle <$ "handle" <*> pCon <*> (pList pHClause) <* "end" <*> pExpr' <*> pExpr' <?> "Handle")
+      <|> (Match <$ "match" <*> pExpr <*> pList pMClause <* "end" <?> "Match")
       <|> foldl1 App <$> pList1_ng pExpr'
   where
     -- This parser is split into two parts. Above are cases that must be surrounded by parentheses

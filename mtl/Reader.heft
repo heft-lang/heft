@@ -1,0 +1,16 @@
+data Nat
+| Z
+| S Nat
+
+effect Reader
+| ask : { Nat / <Reader, r> * <> }
+| local : (Nat -> Nat) -> { a / <Reader, r> * <> } -> { a / <Reader, r> * <> }
+
+val runReader = \r0 -> \prog ->
+  handle Reader
+    | ask r k -> (k r { r })!
+    | local f m r k -> (k r (runReader (f r) m))!
+    | return x _ -> x
+  end r0 prog!
+
+val main = (runReader (S Z) {`local (\x -> S x) { `ask }})!

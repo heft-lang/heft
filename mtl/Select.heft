@@ -1,0 +1,118 @@
+data Nat
+| Z
+| S Nat
+
+data Bool
+| True
+| False
+
+data List (a : *)
+| Nil
+| Cons a (List a)
+
+effect Select
+| select : (x -> r) -> { x / <Select, r> * <> }
+
+val epsilon = { `select (\p -> p True) }
+
+val sequence = \x -> {
+  match x
+  | Nil -> Nil
+  | Cons p ps ->
+    let x = p! in
+    let xs = (sequence ps)! in
+    Cons x xs
+  end
+}
+
+val eqNat = \x -> \y ->
+  match x
+  | Z ->
+    match y
+    | Z -> True
+    | S _ -> False
+    end
+  | S x' ->
+    match y
+    | Z -> False
+    | S y' -> eqNat x' y'
+    end
+  end
+
+-- enumFromN : Nat -> Nat -> List Nat
+val enumFromN = \n -> \x ->
+  match n
+  | Z -> Nil
+  | S n' -> Cons x (enumFromN (S x) n')
+  end
+
+-- replicate : Nat -> a -> List a
+val replicate = \n -> \x ->
+  match n
+  | Z -> Nil
+  | S n' -> Cons x (replicate n' x)
+  end
+
+val and = \x -> \y ->
+  match x
+  | False -> False
+  | True -> y
+  end
+
+-- diff : Nat -> Nat -> Nat
+val diff = \x -> \y ->
+  match x
+  | Z -> y
+  | S x' ->
+    match y
+    | Z -> x
+    | S y' -> diff x' y'
+    end
+  end
+
+-- not : Bool -> Bool
+val not = \x ->
+  match x
+  | False -> True
+  | True -> False
+  end
+
+-- validQueen : Nat -> List Nat -> Bool
+val validQueen = \q -> \qs -> \i ->
+  match qs
+  | Nil -> True
+  | Cons q' qs' ->
+    and (not (eqNat q q')) 
+      (and (not (eqNat (diff q q') i)) 
+        (validQueen q qs' (S i)))
+  end
+
+-- validBoard : List Nat -> Bool
+val validBoard = \qs -> 
+  match qs
+  | Nil -> True
+  | Cons q qs' -> and (validQueen q qs' (S Z)) (validBoard qs')
+  end
+
+-- TODO:
+--
+-- nqueens : Int -> [Int]
+-- nqueens = runSelect (traverse selectColumn columns) validBoard
+--   where
+--   columns = replicate boardSize (Cons 1 (Cons 2 (Cons 3 (Cons 4 Nil))))
+--   selectColumn candidates = select $ \s -> head $ filter s candidates ++ candidates
+-- 
+-- runSelect = \f -> \prog ->
+--   handle Select
+--   | select p _ k -> (k r { r })!
+--   | return x _ -> x
+--   end f prog!
+
+val one   = S Z
+val two   = S one
+val three = S two
+val four  = S three
+val five  = S four
+
+-- main : Bool
+val main = validBoard (Cons one (Cons three (Cons five (Cons two (Cons four Nil)))))
