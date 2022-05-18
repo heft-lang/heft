@@ -19,22 +19,24 @@
 --         ]))
 --   (Var "fib")
 
-data Nat {
-  | Z
-  | S Nat
-}
+data Nat
+| Z
+| S Nat
 
-add = \x -> \y -> 
-  match x {
+val add = \x -> \y -> 
+  match x
   | S z -> S (add z y)
-  | Z -> y }
+  | Z -> y
+  end
 
-fib = \x ->
-  match x {
+val fib = \x ->
+  match x
   | S y -> 
-    match y {
+    match y
     | S z -> add (fib y) (fib z)
-    | Z -> x }
-  | Z -> x }
+    | Z -> x
+    end
+  | Z -> x
+  end
 
-main = fib (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S Z)))))))))))))))))))
+val main = { fib (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S Z))))))))))))))))))) }

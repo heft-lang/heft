@@ -1,3 +1,4 @@
-main =
+val main = {
   let f = \x -> Z in
   id f Z
+}

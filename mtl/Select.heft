@@ -115,4 +115,4 @@ val four  = S three
 val five  = S four
 
 -- main : Bool
-val main = validBoard (Cons one (Cons three (Cons five (Cons two (Cons four Nil)))))
+val main = { validBoard (Cons one (Cons three (Cons five (Cons two (Cons four Nil))))) }

@@ -1,14 +1,12 @@
-data Nat {
-  | Z
-  | S Nat
-}
+data Nat
+| Z
+| S Nat
 
-effect Reader {
-  | ask : { Nat | <Reader, r> * <> }
-}
+effect Reader
+| ask : { a / <Reader, r> * <> }
 
-main = 
-  (handle Reader {
-    | ask p k -> k p { S Z }
-    | return x p -> { x }
-  } Z `ask)!
+val main =
+  handle Reader
+  | ask r k -> (k r { S Z })!
+  | return x _ -> x
+  end Z `ask

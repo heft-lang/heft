@@ -16,4 +16,4 @@ val runError = \prog ->
   | return x _ -> Right x
   end U prog!
 
-val main = (runError {`throw (S Z)})!
+val main = runError {`throw (S Z)}

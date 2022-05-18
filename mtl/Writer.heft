@@ -18,4 +18,4 @@ val runWriter = \prog ->
   | return x w -> Tuple x (w Nil)
   end (\xs -> xs) prog!
 
-val main = (runWriter {let _ = `tell Z in `tell (S Z)})!
+val main = runWriter {let _ = `tell Z in `tell (S Z)}

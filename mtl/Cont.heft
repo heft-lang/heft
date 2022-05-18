@@ -35,7 +35,8 @@ val whatsYourName = \name -> {
     })
 }
 
-val main =
+val main = {
   let x = (runCont (whatsYourName Nil))! in
   let y = (runCont (whatsYourName (Cons Z Nil)))! in
   Tuple x y
+}

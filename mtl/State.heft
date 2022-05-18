@@ -16,4 +16,4 @@ val runState = \s0 -> \prog ->
   | return x p -> Tuple x p
   end s0 prog!
 
-val main = (runState Z {let x = `get in let _ = `put (S x) in x})!
+val main = runState Z {let x = `get in let _ = `put (S x) in x}

@@ -20,4 +20,4 @@ val runAccum = \prog ->
   | return x w -> Tuple x (w Nil)
   end (\xs -> xs) prog!
 
-val main = (runAccum {let x = `look in let _ = `add Z in x})!
+val main = runAccum {let x = `look in let _ = `add Z in x}

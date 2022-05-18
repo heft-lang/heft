@@ -13,4 +13,4 @@ val runReader = \r0 -> \prog ->
     | return x _ -> x
   end r0 prog!
 
-val main = (runReader (S Z) {`local (\x -> S x) { `ask }})!
+val main = runReader (S Z) {`local (\x -> S x) { `ask }}

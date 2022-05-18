@@ -3,7 +3,7 @@ module Main where
 import Heft.Interpreter (eval)
 import Heft.Parser (pProgram, runParser)
 import Heft.Util (letify)
-import Heft.Syntax.Expr (Expr (Var))
+import Heft.Syntax.Expr (Expr (Var, Run))
 import System.Environment (getArgs)
 
 main :: IO ()
@@ -18,4 +18,4 @@ runFile x = do
   putStrLn "Parsed Expression:"
   print prog
   putStrLn "Result Value:"
-  print (eval (letify prog (Var "main")))
+  print (eval (letify prog (Run (Var "main"))))
