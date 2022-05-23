@@ -177,7 +177,7 @@ pProgram = Program <$> pList pDecl
 
 pDecl :: Parser Decl
 pDecl =
-  (Effect <$ "effect" <*> pCon <*> pList pEClause <?> "Effect Declaration")
+  (Effect <$ "effect" <*> pCon <* pList (pParens ((,) <$> pVar <* ":" <*> pKind)) <*> pList pEClause <?> "Effect Declaration")
     <|> (Datatype <$ "data" <*> pCon <*> pList (pParens ((,) <$> pVar <* ":" <*> pKind)) <*> pList pDClause <?> "Data Declaration")
     <|> (Function <$ "val" <*> pVar <*> pure Nothing <*> pure [] <* "=" <*> pExpr <?> "Value Declaration")
 

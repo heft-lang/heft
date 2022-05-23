@@ -1,0 +1,95 @@
+-- effect CC (a : *)
+-- | prompt : { a / <CC,r> * <> } -> { a / <CC,r> * <> }
+-- | yield  : ((a -> { b / <CC,r> * <> }) -> { b / <CC,r> * <> }) -> { a / <CC,r> * <> }
+-- 
+-- --  runCC : { a / <CC, r> * rl } -> { a / <r> * <CC, rl> }
+-- val runCC = \prog ->
+--   handle CC
+--   | prompt body _ k -> (k U (runCC body))!
+--   | yield f _ k -> (f (\x -> (k U { x })!))!
+--   | return x _ -> x
+--   end U prog!
+-- 
+-- val main = runCC { S (`prompt { S (S (`yield (\k -> { k (k (k Z)) }))) }) }
+
+-- data Nat
+-- | Z
+-- | S Nat
+-- 
+-- effect CC (a : *)
+-- | prompt : { a / <CC,r> * <> } -> { a / <CC,r> * <> }
+-- | yield  : ((a -> { b / <CC,r> * <> }) -> { b / <CC,r> * <> }) -> { a / <CC,r> * <> }
+
+data Nat
+| Z
+| S Nat
+
+data List (a : *)
+| Nil
+| Cons a (List a)
+
+val diff = \m -> \n ->
+  match m
+  | Z -> n
+  | S m' ->
+    match n
+    | Z -> m
+    | S n' -> diff m' n'
+    end
+  end
+
+--  runCC : { a / <CC, r> * rl } -> { a / <r> * <CC, rl> }
+val runCC = \prog ->
+  handle CC
+  | prompt body _ k -> (k U (go Z (body Z)))!
+  | yield _ f _ k -> (f (\x -> (k U { x })!))!
+  | return x _ -> x
+  end U
+    (let go = \m -> \prog ->
+      handle CC
+      | prompt body _ k -> (k U (go (S m) (body (S m))))!
+      | yield m' f _ k -> 
+        match diff m m'
+        | Z -> (f (\x -> (k U { x })!))!
+        | S _ -> `yield m' f
+        end
+      | return x _ -> x
+      end U prog!
+    in (go Z prog)!)
+
+-- val main = runCC { `prompt (\m -> { S (S (`yield m (\k -> { k (k (k Z)) }))) }) }
+
+-- Tests:
+
+-- Abelson98
+
+val abelson98_v = Cons Z (Cons Z (Cons Z (Cons (S Z) (Cons Z (Cons Z Nil)))))
+
+val abelson98_1 = {
+  `prompt (\m ->
+    let go = \xs ->
+      match xs
+      | Nil -> Z
+      | Cons x xs' ->
+        match x
+        | Z -> go xs'
+        | S y -> `yield m (\_ -> { S y })
+        end
+      end in
+    go abelson98_v)
+}
+
+
+--   for i = 0 to vect_length v
+--    do
+--      let x = v.(i)
+--      in if x < 0 then exit x else ()
+--    done ;
+--    true)
+--        ) ;;
+-- (* -3 *)
+-- 
+-- (* Does not type check in our type system (but this is easily fixed, see next test). *)
+-- 
+
+val main = runCC abelson98_1
