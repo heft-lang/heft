@@ -148,7 +148,6 @@ mapSubExpr f = \case
   Con s exs -> Con s (map f exs)
   Match ex x0 -> Match (f ex) (map (second f) x0)
   Handle l x0 ex ex' -> Handle l (map (second f) x0) (f ex) (f ex')
-  Handle' x0 ex ex' -> Handle' (map (second f) x0) (f ex) (f ex')
   Op s exs -> Op s (map f exs)
   Letrec s ex ex' -> Letrec s (f ex) (f ex')
   BOp ex bo ex' -> BOp (f ex) bo (f ex')

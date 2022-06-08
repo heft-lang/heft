@@ -17,12 +17,13 @@ effect Cont
 | callCC : ((a -> { b / <Cont, r> * <> }) -> { a / <Cont, r> * <> }) -> { a / <Cont, r> * <> }
 | exit : a -> { a / <Cont, r> * <> }
 
-val runCont = \prog ->
+val runCont = \prog -> {
   handle Cont
     | callCC f _ k -> (k U (f (\x -> { `exit x })))!
     | exit m _ k -> m
     | return x _ -> x
   end U prog!
+}
 
 val whatsYourName = \name -> {
   `callCC (\exit -> {

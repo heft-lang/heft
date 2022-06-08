@@ -1,4 +1,4 @@
-val hCatch = \ prog ->
+val hCatch = \ prog -> {
   handle Catch
   | throw p k -> Nothing
   | catch m1 m2 p k -> (k p {
@@ -8,9 +8,9 @@ val hCatch = \ prog ->
       end
     })!
   | return x _ -> Just x
-  end Z prog!
+  end Z prog! }
 
-val hCatch2 = \ prog ->
+val hCatch2 = \ prog -> {
   handle Catch
   | throw p k -> Nothing
   | catch m1 m2 p k -> (k p {
@@ -21,14 +21,14 @@ val hCatch2 = \ prog ->
     })!
   | abort m p k -> m!
   | return x _ -> Just x
-  end Z prog!
+  end Z prog! }
 
-val hState = \ s0 -> \ prog ->
+val hState = \ s0 -> \ prog -> {
   handle State
   | get    s k -> (k s { s })!
   | put s' s k -> (k s' { Z })!
   | return x s -> Pair x s
-  end s0 prog!
+  end s0 prog! }
 
 val transact = {
   let _ = `put (S Z) in

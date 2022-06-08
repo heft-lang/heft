@@ -13,11 +13,12 @@ effect Accum
 | look : { List / <Accum, r> * <> }
 | add : Nat -> { U / <Accum, r> * <> } 
 
-val runAccum = \prog ->
+val runAccum = \prog -> {
   handle Accum
   | look w k -> (k w { w Nil })!
   | add x w k -> (k (\xs -> w (Cons x xs)) { w })!
   | return x w -> Tuple x (w Nil)
   end (\xs -> xs) prog!
+}
 
 val main = runAccum {let x = `look in let _ = `add Z in x}

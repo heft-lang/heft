@@ -76,8 +76,7 @@ data Expr = V Val      -- Internal syntax
           | Run Expr
           | Con String [Expr]
           | Match Expr [(Pat, Expr)]
-          | Handle Name [(CPat,Expr)] Expr Expr -- surface syntax
-          | Handle' [(CPat,Expr)] Expr Expr -- internal syntax
+          | Handle Name [(CPat,Expr)] Expr Expr
           | Op Name [Expr]
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr

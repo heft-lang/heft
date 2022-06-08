@@ -9,11 +9,12 @@ effect State
 | get : { Nat / <State, r> * <> }
 | put : Nat -> { U / <State, r> * <> }
 
-val runState = \s0 -> \prog ->
+val runState = \s0 -> \prog -> {
   handle State
   | put x s k -> (k x { U })!
   | get s k -> (k s { s })!
   | return x p -> Tuple x p
   end s0 prog!
+}
 
 val main = runState Z {let x = `get in let _ = `put (S x) in x}

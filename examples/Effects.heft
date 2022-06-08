@@ -5,8 +5,8 @@ data Nat
 effect Reader
 | ask : { a / <Reader, r> * <> }
 
-val main =
+val main = {
   handle Reader
   | ask r k -> (k r { S Z })!
   | return x _ -> x
-  end Z `ask
+  end Z `ask }

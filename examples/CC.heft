@@ -39,13 +39,13 @@ val diff = \m -> \n ->
   end
 
 --  runCC : { a / <CC, r> * rl } -> { a / <r> * <CC, rl> }
-val runCC = \prog ->
+val runCC = \prog -> {
   handle CC
   | prompt body _ k -> (k U (go Z (body Z)))!
   | yield _ f _ k -> (f (\x -> (k U { x })!))!
   | return x _ -> x
   end U
-    (let go = \m -> \prog ->
+    (let go = \m -> \prog -> {
       handle CC
       | prompt body _ k -> (k U (go (S m) (body (S m))))!
       | yield m' f _ k -> 
@@ -54,8 +54,8 @@ val runCC = \prog ->
         | S _ -> `yield m' f
         end
       | return x _ -> x
-      end U prog!
-    in (go Z prog)!)
+      end U prog! }
+    in (go Z prog)!) }
 
 -- val main = runCC { `prompt (\m -> { S (S (`yield m (\k -> { k (k (k Z)) }))) }) }
 
