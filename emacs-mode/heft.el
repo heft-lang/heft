@@ -15,8 +15,8 @@
 
 (setq heft-font-lock-keywords
       (let* (
-             (symbols-regex '"\\\\\\|\|\\|!\\|{\\|}\\|/\\|(\\|)\\|->\\|<\\|>\\|*\\|,\\|:\\|_")
-             (x-keywords '("data" "effect" "val" "end" "match" "handle" "return"))
+             (symbols-regex '"\\\\\\|\|\\|!\\|{\\|}\\|/\\|(\\|)\\|->\\|<\\|>\\|*\\|,\\|:\\|_\\|=")
+             (x-keywords '("data" "effect" "val" "end" "match" "handle" "return" "let" "in"))
 
              (x-keywords-regexp (regexp-opt x-keywords 'symbols))
              )
