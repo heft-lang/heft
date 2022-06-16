@@ -310,25 +310,31 @@ tc (Ann e σ) = do
        u `isInstanceOf` t 
        return (s , u , ea) 
 
-tcDecl :: Decl -> TC TCResult
+tcDecl :: Decl -> TC (Maybe (String , TCResult))
 
 -- Effect declarations 
 tcDecl (Effect label ops) = do
   registerEffect (label , (\(op_name, _ , _ , _) -> op_name) <$> ops)  
   ops' <- mapM (declareOp label) ops
-  --foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' _
-  throwError "Not implemented" 
+  foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (return Nothing)
 
 tcDecl (Datatype dname params cons) = do
   registerDatatype (dname , fst <$> cons) 
   cons' <- mapM (declareCons dname (fst <$> params)) cons
-  --foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' _
-  throwError "Not implemented"  
+  foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' (return Nothing)
 
-tcDecl (Function fname sig pats e) = throwError "Not implemented" 
+tcDecl (Function fname Nothing [] e) = do
+  result <- tc e
+  return (Just (fname , result))
+tcDecl (Function fname (Just t) [] e) = do
+  σ      <- generalize t 
+  result <- tc (Ann e σ)
+  return (Just (fname , result)) 
+tcDecl (Function fname sig _  e) = throwError "Type checking for pattern matching functions is not yet implemented (use labda's and match instead)" 
 
-tcProgram :: Program -> TC [TCResult]
-tcProgram = mapM tcDecl . decls
+
+tcProgram :: Program -> TC [Maybe (String , TCResult)]
+tcProgram = fmap reverse . foldM (\acc decl -> tcDecl decl >>= \r -> return (r:acc)) [] . decls
 
 type Result = Either String (Scheme , (Row , Row)) 
 
@@ -342,5 +348,5 @@ infer e = (\(σ , ann) -> (normalizeAlpha σ , normalizeAnn ann))  <$>
 check :: Expr -> Scheme -> Result
 check e σ = infer (Ann e σ)
 
-checkProgram :: Program -> Either String [TCResult] 
+checkProgram :: Program -> Either String [Maybe (String , TCResult)] 
 checkProgram p = fst $ runTC (tcProgram p)

@@ -18,15 +18,19 @@ import Heft.TC.TC
 
 import System.Console.Pretty
 
-data LogType = INFO | WARNING | ERROR
+data LogType = INFO | WARNING | ERROR | SUCCESS
 
 typeStr :: LogType -> String
 typeStr INFO    =  style Bold $ "[INFO]   "
+typeStr SUCCESS =  style Bold $ colorize Foreground Green  "[SUCCESS]" 
 typeStr WARNING =  style Bold $ colorize Foreground Yellow "[WARNING]"
 typeStr ERROR   =  style Bold $ colorize Foreground Red  "[ERROR]  "
 
 reportStr :: LogType -> String -> String
 reportStr t str = typeStr t ++ " " ++ str 
+
+logPath :: FilePath -> String
+logPath = style Bold 
 
 report :: LogType -> String -> IO ()
 report t str = putStrLn (reportStr t str) 
@@ -60,8 +64,10 @@ load path = do
   let tcOutput = checkProgram program
 
   case tcOutput of
-    (Left  err) -> liftIO $ report ERROR   $ "Failed to load " ++ qpath ++ ": " ++ err
-    (Right _)   -> liftIO $ report WARNING $ "Loaded " ++ qpath ++ ", but only ran the typechecker."
+    (Left  err) -> liftIO $ report ERROR   $ "Failed to load " ++ logPath qpath ++ ": " ++ err
+    (Right _)   -> do
+      liftIO $ report SUCCESS $ "Type checking succeeded for " ++ logPath qpath ++ "!"
+      liftIO $ report WARNING $ "Loaded " ++ logPath qpath ++ ", but only ran the typechecker."
 
   -- TODO: actually load the contents of the file 
 
