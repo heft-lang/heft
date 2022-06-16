@@ -17,5 +17,5 @@ After which you can type `:<TAB>` to view the available commands.
 Alternatively you can run the interpreter on a chosen file:  
 
 ```
-$ cabal run heft -- <filename> 
+$ cabal run heft -- <filepath> 
 ```
