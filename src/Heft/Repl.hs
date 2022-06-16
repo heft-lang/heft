@@ -4,6 +4,7 @@ import Control.Monad.Trans
 import Control.Monad.State
 import Control.Exception (throwIO)
 import Data.List (isPrefixOf , delete)
+import Data.Char (isSpace)
 import Data.Monoid
 
 import System.Console.Haskeline (Interrupt (..) , Completion (..))
@@ -47,16 +48,20 @@ help args = liftIO $ print $ "Help: " ++ show args
 load :: FilePath -> Repl ()
 load path = do
 
+  st <- get
+
+  let qpath = filter (not . isSpace) (wd st </> path) 
+  
   -- Read and parce source file 
-  src <- liftIO $ readFile path 
-  let program = runParser path pProgram src
+  src <- liftIO $ readFile qpath
+  let program = runParser qpath pProgram src
 
   -- Run type checker
   let tcOutput = checkProgram program
 
   case tcOutput of
-    (Left  err) -> liftIO $ report ERROR   $ "Failed to load " ++ path ++ ": " ++ err
-    (Right _)   -> liftIO $ report WARNING $ "Loaded " ++ path ++ ", but only ran the typechecker."
+    (Left  err) -> liftIO $ report ERROR   $ "Failed to load " ++ qpath ++ ": " ++ err
+    (Right _)   -> liftIO $ report WARNING $ "Loaded " ++ qpath ++ ", but only ran the typechecker."
 
   -- TODO: actually load the contents of the file 
 
@@ -151,7 +156,7 @@ repl = fmap fst $ flip runStateT initialState $ evalReplOpts $
   ReplOpts
       { banner           = customBanner
       , command          =  cmd
-      , options          =  [("load" , load)]
+      , options          =  opts
       , prefix           =  Just ':'
       , multilineCommand =  Just "paste"
       , tabComplete      =  (Prefix (wordCompleter byWord) defaultMatcher)
