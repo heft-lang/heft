@@ -4,12 +4,16 @@ import Heft.Interpreter (eval)
 import Heft.Parser (pProgram, runParser)
 import Heft.Util (letify)
 import Heft.Syntax.Expr (Expr (Var, Run))
+import Heft.Repl
 import System.Environment (getArgs)
 
 main :: IO ()
 main = do
   x : _ <- getArgs
-  runFile x
+  if x == "repl" then
+    repl
+  else 
+    runFile x
 
 runFile :: String -> IO ()
 runFile x = do

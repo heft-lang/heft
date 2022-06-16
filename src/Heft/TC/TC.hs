@@ -232,9 +232,7 @@ tc (Handle label cs e_param e) = do
           return (bindings . bindT x t)
         processOpArgs _      _      =
           throwError $ "Incorrect number of arguments in operation pattern"
-          
-
-tc (Handle' _ _ _) = throwError "Internal error"  
+         
 
 -- Operations. Defined in terms of Var/App rules 
 tc (Op x es) = tc (mkE x (reverse es))
@@ -315,17 +313,19 @@ tc (Ann e σ) = do
 tcDecl :: Decl -> TC TCResult
 
 -- Effect declarations 
-tcDecl (Effect label ops e) = do
+tcDecl (Effect label ops) = do
   registerEffect (label , (\(op_name, _ , _ , _) -> op_name) <$> ops)  
   ops' <- mapM (declareOp label) ops
-  foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (tc e) 
+  --foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' _
+  throwError "Not implemented" 
 
-tcDecl (Datatype dname params cons e) = do
+tcDecl (Datatype dname params cons) = do
   registerDatatype (dname , fst <$> cons) 
   cons' <- mapM (declareCons dname (fst <$> params)) cons
-  foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' (tc e) 
+  --foldr (\(con , σ) f m -> f (withEnv (bindS con σ) m )) id cons' _
+  throwError "Not implemented"  
 
-tcDecl (Function fname sig pats e) = undefined
+tcDecl (Function fname sig pats e) = throwError "Not implemented" 
 
 tcProgram :: Program -> TC [TCResult]
 tcProgram = mapM tcDecl . decls
@@ -341,3 +341,6 @@ infer e = (\(σ , ann) -> (normalizeAlpha σ , normalizeAnn ann))  <$>
 
 check :: Expr -> Scheme -> Result
 check e σ = infer (Ann e σ)
+
+checkProgram :: Program -> Either String [TCResult] 
+checkProgram p = fst $ runTC (tcProgram p)

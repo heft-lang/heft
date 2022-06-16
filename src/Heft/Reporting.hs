@@ -1,13 +1,13 @@
 module Heft.Reporting where
 
-import System.Console.Pretty
+--import System.Console.Pretty
 
 data LogType = INFO | WARNING | ERROR
 
 typeStr :: LogType -> String
 typeStr INFO    = "[-INFO----]"
-typeStr WARNING = style Bold $ colorize Foreground Yellow "[-WARNING-]"
-typeStr ERROR   = style Bold $ colorize Foreground Red "[-ERROR---]"
+typeStr WARNING = {- colorize Foreground Yellow -} "[-WARNING-]"
+typeStr ERROR   = {- colorize Foreground Red -} "[-ERROR---]"
 
 reportStr :: LogType -> String -> String
 reportStr t str = typeStr t ++ " " ++ str 
