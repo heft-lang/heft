@@ -314,7 +314,7 @@ tcDecl :: Decl -> TC (Maybe (String , TCResult))
 
 -- Effect declarations 
 tcDecl (Effect label ops) = do
-  registerEffect (label , (\(op_name, _ , _ , _) -> op_name) <$> ops)  
+  registerEffect (label , (\(op_name , _ , _) -> op_name) <$> ops)  
   ops' <- mapM (declareOp label) ops
   foldr (\(op , σ) f m -> f (withEnv (bindS op σ) m)) id ops' (return Nothing)
 

@@ -60,8 +60,7 @@ data Decl = Function Name (Maybe Type) [Pat] Expr
               ]
           | Effect Name
               [ ( Name                 -- op name 
-                , (Name , Name , Name) -- reserved row names 
-                , Type                 -- Return Type 
+                , Type                 -- Return Type (including suspension)
                 , [Type]               -- Argument Types 
                 )
               ]

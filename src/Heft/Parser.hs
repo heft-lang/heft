@@ -236,12 +236,12 @@ pPatInner :: Parser Pat
 pPatInner = (PVar <$> pVar <?> "Variable Pattern") <|> pParens pPat
 
 -- Effect declaration clauses
-pEClause :: Parser (String, (String, String, String), Type, [Type])
-pEClause = (\n (r, t, args) -> (n, r, t, args)) <$ "|" <*> pVar <* ":" <*> (opSig <$> pType)
+pEClause :: Parser (String, Type, [Type])
+pEClause = (\n (t, args) -> (n, t, args)) <$ "|" <*> pVar <* ":" <*> (opSig <$> pType)
   where
-    opSig :: Type -> ((String, String, String), Type, [Type])
-    opSig (FunT x xs) = let (r, t, args) = opSig xs in (r, t, x : args)
-    opSig (SusT t (ConsR _ (VarR r), NilR)) = ((r, "TODO", "TODO"), t, [])
+    opSig :: Type -> (Type, [Type])
+    opSig (FunT x xs) = let (t, args) = opSig xs in (t, x : args)
+    opSig t = (t, [])
     opSig _ = error "pEClause: malformed operation signature"
 
 -- Data declaration clauses
