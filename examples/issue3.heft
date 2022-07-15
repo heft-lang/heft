@@ -1,0 +1,38 @@
+val hCatch2 = \ prog -> {
+  handle Catch
+  | throw p k -> Nothing
+  | catch m1 m2 p k -> (k p {
+      match (hCatch2 m1)!
+      | Nothing -> `abort (k p m2)
+      | Just x -> x
+      end
+    })!
+  | abort m p k -> m!
+  | return x _ -> Just x
+  end Z prog! }
+
+
+val runWriter = \prog -> {
+  handle Writer
+  | tell x w k -> (k (\xs -> w (Cons x xs)) { U })!
+  | return x w -> Tuple x (w Nil)
+  end (\xs -> xs) prog!
+}
+
+val id = \x -> { `catch x { `throw } }
+
+val withSay = \c -> {
+  handle Say
+  | say w _ k  -> let _ = (k U {U})! in `tell w
+  | return x _ -> x
+  end U c!
+}
+
+val withSay' = \c -> {
+  handle Say'
+  | say' w _ k  -> let _ = (k U {U})! in `tell w
+  | return x _ -> x
+  end U c!
+}
+
+val main = runWriter (hCatch2 (withSay (id (withSay' {`catch {let _ = `say A in let _ = `say' B in `throw} {Zero}}))))
