@@ -1,0 +1,77 @@
+data S0
+| Done
+| Fail
+| Test S0
+| Neg S0
+| Seq S0 S0
+| Or S0 S0
+| OrL S0 S0
+| Rec String S0
+| SVar String
+
+data Term
+| TVar String
+| Con String (List Term)
+
+data Env (v : *) (e : R)
+| ENil
+| ECons Var { v / e * e } (Env v e)
+
+data List (a : *)
+| Nil (List a)
+| Cons a (List a)
+
+data Tuple (a : *) (b : *)
+| Tuple a b
+
+effect S0 -- (v : *)
+| let_    : Var -> v -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
+| var     : Var -> { v / <S0, e> * eg }
+| fail    : { a / <S0, e> * eg }
+| negate  : { a / <S0, e> * eg } -> { a / <S0, e> * eg }
+| test    : { a / <S0, e> * eg } -> { a / <S0, e> * eg }
+| choose  : { a / <S0, e> * eg } -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
+| chooseL : { a / <S0, e> * eg } -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
+| recurse : Var -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
+
+val append -- : List a -> List a -> List a
+  = \xs -> \ys -> match xs
+                  | Nil -> ys
+                  | Cons x' xs' -> Cons x' (append xs' ys)
+                  end
+
+-- | Left biased choice
+val chooseLList -- : List a -> List a -> List a
+  = \xs -> \ys ->
+    match xs
+    | Nil -> ys
+    | Cons _ _ -> xs
+    end
+
+val hS0 -- : Env -> Term -> { a / <S0, e> * eg } -> { List Term / e * eg }
+  = \env0 -> \t0 -> \m0 ->
+    handle S0
+    | let_ n v m _ k -> (k U (hS0 (ECons n v env0) t0 m))!
+    | var n _ k -> match lookupEnv n env
+                   | Just v -> (k U { v })!
+                   | Nothing -> Nil
+                   end
+    | fail _ k -> Nil
+    | negate m _ k -> (k U { match (hS0 env0 t0 m)!
+                             | Nil -> Cons t0 Nil
+                             | Cons _ _ -> Nil
+                             end })!
+    | test m _ k -> (k U { match (hS0 env0 t0 m)!
+                           | Nil -> Nil
+                           | Cons _ _ -> Cons t0 Nil
+                           end })!
+    | choose m1 m2 _ k -> (k U { append ((hS0 env0 t0 m1)!) ((hS0 env0 t0 m2)!) })!
+    | chooseL m1 m2 _ k -> (k U { match (hS0 env0 t0 m1)!
+                                  | Nil -> (hS0 env0 t0 m2)!
+                                  | Cons x xs -> Cons x xs
+                                  end })!
+    | recurse n m _ k -> (k U { hS0 (ECons n { `recurse m } env0) t0 m })!
+    | return _ _ -> Cons t0 Nil
+    end U m0!
+
+val main = { Nil }
