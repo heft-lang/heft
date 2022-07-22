@@ -35,7 +35,7 @@ e |-> e'
 E[ e ] --> E[ e' ]
 
 
-{e}! |-> e 
+{e}! |-> e
 
 
 (lam x e) v |-> e[x/v]
@@ -255,7 +255,10 @@ contract (PRRun e) c = (e, c)
 contract (PRCon f vs) c = (V $ VCon f vs, c)
 contract (PRMatch f vs pes) c = case match (VCon f vs) pes of
   Just (r, e) -> (foldr (\ (x,v) e -> subst e (V v) x) e r, c)
-  Nothing -> error $ "Pattern match failure on value " ++ (show (VCon f vs))
+  Nothing -> error $ unlines
+    [ "Pattern match failure on value: " ++ (show (VCon f vs))
+    , "Matching against: " ++ show (map fst pes)
+    ]
   where
     match v           ((PVar x, e):_)      = Just ([(x,v)], e)
     match (VCon f vs) ((PCon g ps, e):pes) | f == g && length vs == length ps
@@ -345,10 +348,8 @@ eval e = iter (decompose e CtxMt)
 {- Drive -}
 
 drive :: Expr -> Val
-drive e = trace (show e ++ "\n") $ 
+drive e = trace (show e ++ "\n") $
   case decompose e CtxMt of
     VD v -> v
     RD c r -> case contract r c of
       (e', c') -> drive (recompose c' e')
-
-

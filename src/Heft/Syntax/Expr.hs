@@ -1,7 +1,7 @@
 module Heft.Syntax.Expr where
 
 import Heft.Syntax.Misc
-import Heft.Syntax.Type 
+import Heft.Syntax.Type
 
 {- Syntax:
 
@@ -18,7 +18,6 @@ e ::= v
     | letrec x = e in e          -- Assumes that e is pure (returns a value without any side-effects)
     | e ⊕ e
 
-
 ⊕ ∈ +,-,=,...
 
 
@@ -26,7 +25,6 @@ v ::= vlam x e
     | v{e}
     | vcon x v*
     | c
-
 
 case ::= return x p = e
        | op f x* p k = e
@@ -44,29 +42,29 @@ type Program = [Decl]
 
 data Decl = DDecl ...
           | EDecl ...
-          | FDecl Name (Maybe Type) [Pat] Expr 
--} 
+          | FDecl Name (Maybe Type) [Pat] Expr
+-}
 
 
 newtype Program = Program { decls :: [Decl] }
   deriving Show
 
-data Decl = Function Name (Maybe Type) [Pat] Expr          
+data Decl = Function Name (Maybe Type) [Pat] Expr
           | Datatype Name
-              [(Name , Kind)]   -- Parameters 
-              [ ( Name          -- constructor name 
+              [(Name , Kind)]   -- Parameters
+              [ ( Name          -- constructor name
                 , [Type]        -- Argument Types
                 )
               ]
           | Effect Name
-              [ ( Name                 -- op name 
+              [ ( Name                 -- op name
                 , Type                 -- Return Type (including suspension)
-                , [Type]               -- Argument Types 
+                , [Type]               -- Argument Types
                 )
               ]
   deriving Show
 
-data Expr = V Val      -- Internal syntax     
+data Expr = V Val      -- Internal syntax
           | Num Int
           | Lam String Expr
           | Var String
@@ -79,7 +77,7 @@ data Expr = V Val      -- Internal syntax
           | Op Name [Expr]
           | Letrec String Expr Expr
           | BOp Expr BinOp Expr
-          | Ann Expr Scheme 
+          | Ann Expr Scheme
   deriving Show
 
 data Pat = PCon String [Pat]
@@ -90,11 +88,12 @@ data Val  = VLam String Expr
           | VSusp Expr
           | VNum Int
           | VCon String [Val]
+          | VStr String
 
 instance Eq Val where
   VNum i1 == VNum i2 = i1 == i2
   VCon f vs == VCon g ws | length vs == length ws = f == g && vs == ws
-                         | otherwise = False
+  VStr s1 == VStr s2 = s1 == s2
   _ == _ = False
 
 instance Show Val where -- built-in support for list  show (VLam x e) = "(λ " ++ x ++ " . " ++ show e ++ ")"
@@ -103,11 +102,13 @@ instance Show Val where -- built-in support for list  show (VLam x e) = "(λ " +
   show (VCon "[]" []) = "[]"
   show (VCon "::" [h,t]) = show h ++ " :: " ++ show t
   show (VCon "," [a,b]) = "(" ++ show a ++ ", " ++ show b ++ ")"
-  
+
   show (VCon f []) = f
   show (VCon f vs) = "(" ++ f ++ " " ++ unwords (map show' vs) ++ ")"
 
   show (VLam x e) = "(\\" ++ x ++ " -> " ++ show e ++ ")"
+
+  show (VStr s) = show s
 
 show' :: Val -> [Char]
 show' v@(VCon "::" [_, _]) = "(" ++ show v ++ ")"

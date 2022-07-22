@@ -135,10 +135,11 @@ mapValExpr f = \case
 mapSubExpr :: (Expr -> Expr) -> Expr -> Expr
 mapSubExpr f = \case
   V val -> V $ case val of
-    (VLam s ex) -> VLam s (f ex)
-    (VSusp ex) -> VSusp (f ex)
-    (VNum n) -> VNum n
-    (VCon s vals) -> VCon s (map (mapValExpr f) vals)
+    VLam s ex -> VLam s (f ex)
+    VSusp ex -> VSusp (f ex)
+    VNum n -> VNum n
+    VCon s vals -> VCon s (map (mapValExpr f) vals)
+    VStr s -> VStr s
   Num n -> Num n
   Lam s ex -> Lam s (f ex)
   Var s -> Var s
@@ -201,6 +202,8 @@ pExpr =
                 -- these are later applied as much as possible using the 'fixApply' function
                 <|> Con <$> pCon <*> pure []
                 <|> Op <$> pOp <*> pure []
+                <|> V . VStr <$ pToken "\"" <*> pMunch (/= '"') <* "\""
+                <|> pParens (BOp <$> pExpr <*> (Eq <$ "==") <*> pExpr <?> "<expr> = <expr>")
                 <|> (pParens pExpr <?> "Parens")
             )
           <*> pMaybe "!"
