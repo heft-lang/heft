@@ -30,22 +30,18 @@ val append -- : List a -> List a -> List a
 val singleton
   = \x -> Cons x Nil
 
-val isSingleton
-  = \xs ->
-    match xs
-    | Nil -> F
-    | Cons _ xs ->
-      match xs
-      | Nil -> T
-      | Cons _ _ -> F
-      end
-    end
-
 val isNil
   = \xs ->
     match xs
     | Nil -> T
     | Cons _ _ -> F
+    end
+
+val isSingleton
+  = \xs ->
+    match xs
+    | Nil -> F
+    | Cons _ xs -> isNil xs
     end
 
 data Unit
@@ -61,9 +57,19 @@ val hFail = \m -> {
   end U m!
 }
 
+data Bool
+| T
+| F
+
+-- ambiguous parse: Bool can be both the built-in type or a type constructor
+
 effect Choice
-| choose  : { a / <Choice, e> * eg } -> { a / <Choice, e> * eg } -> { a / <Choice, e> * eg }
-| chooseL : { a / <Choice, e> * eg } -> { a / <Choice, e> * eg } -> { a / <Choice, e> * eg }
+| choose  : { a / <Choice, e> * eg }
+         -> { a / <Choice, e> * eg }
+         -> { a / <Choice, e> * eg }
+| chooseL : { a / <Choice, e> * eg }
+         -> { a / <Choice, e> * eg }
+         -> { a / <Choice, e> * eg }
 
 val hChoice = \m -> {
   handle Choice
@@ -80,43 +86,41 @@ val hChoice = \m -> {
 effect Neg
 | negate : { Unit / <Neg, e> * eg } -> { Unit / <Neg, e> * eg }
 
-val hNeg = \m -> {
+-- higher-order
+val hNeg = \h -> \m -> {
   handle Neg
-  | negate m _ k ->
-    match (k U m)!
-    | Nil -> singleton U
-    | Cons _ _ -> Nil
-    end
+  | negate m _ k -> (k U {
+      match (h m)!
+      | Nil -> U
+      | Cons _ _ -> `fail
+      end
+    })!
   | return x _ -> x
   end U m!
 }
 
-val hIt = \m -> hNeg (hChoice (hFail { Cons m! Nil })) 
+val hND = \m -> hNeg hND (hChoice (hFail { Cons m! Nil })) 
 
-val test_it = {
-  Tuple
-    (hIt { `negate {`choose {`fail} {`fail}}})!
-    (hIt { `negate {`choose {A} {`fail}} })!
-    (hIt { `negate {`choose {`fail} {A}} })!
-    (hIt { `negate {`choose {A} {B}} })!
-    (hIt { `negate {`fail }})!
+effect Test
+| test : { a / <Test, e> * eg } -> { a / <Test, e> * eg }
+
+-- higher-order
+val hTest = \h -> \s0 -> \m -> {
+  handle Test
+  | test m s k -> (k s {
+      match (h s m)!
+      | Tuple x _ -> x
+      end
+    })!
+  | return x s -> Tuple x s
+  end s0 m!
 }
 
--- non deterministic sequential programs
-effect S0 -- (v : *)
-| succeed : { a / <S0, e> * eg }
-| fail    : { a / <S0, e> * eg }
-| negate  : { a / <S0, e> * eg } -> { a / <S0, e> * eg }
-| test    : { a / <S0, e> * eg } -> { a / <S0, e> * eg }
-| choose  : { a / <S0, e> * eg } -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
-| chooseL : { a / <S0, e> * eg } -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
--- can also be used as variable if applied to zero arguments:
-| app     : Var -> List { v / <S0, e> * eg } -> { v / <S0, e> * eg }
-| recurse : Var -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
-| restore : Term -> { U / <S0, e> * eg }
+val hTest' = \t -> \m -> hTest hTest' t m
 
-effect Prog -- (ei : Row) (v : *)
-| define  : Var -> List Var -> { v / ei * ei } -> { Unit / <Prog, e> * eg }
+effect Fn -- (v : *)
+| app : Var -> List { v / <S0, e> * eg } -> { v / <S0, e> * eg }
+| recurse : Var -> { a / <S0, e> * eg } -> { a / <S0, e> * eg }
 
 val lookupEnv -- : Var -> Env e -> Maybe (Tuple (List Var) { Term / e * e })
   = \x -> \env ->
@@ -138,36 +142,23 @@ val growEnv -- : List String -> List { v / e * e } -> Env e -> Env e
       end
     end
 
-
-
-val hS0 -- : Env -> Term -> { a / <S0, e> * eg } -> { List Term / e * eg }
-  = \env0 -> \t0 -> \m0 -> {
-    handle S0
-    | succeed _ k -> Cons t0 Nil
-    | fail _ k -> Nil
-    | negate m _ k -> match (k U m)!
-                      | Nil -> singleton t0
-                      | Cons _ _ -> Nil
-                      end
-    | test m _ k -> (k U { match (hS0 env0 t0 m)!
-                           | Nil -> `fail
-                           | Cons _ _ -> Cons t0 Nil
-                           end })!
-    | choose m1 m2 _ k -> append (k U m1)! (k U m2)!
-    | chooseL m1 m2 _ k -> match (k U m1)!
-                           | Nil -> (k U m2)!
-                           | Cons x xs -> Cons x xs
-                           end
-    | app f xs _ k -> match lookupEnv f env0
-                      | Just (Tuple xs' m) -> (k U (hS0 (growEnv xs' xs env0) t0 m))!
-                      | Nothing -> Nil
-                      end
-    -- is this still denotational?
-    | recurse n m t k -> (k t { hS0 (ECons n { `recurse m } env0) t m })!
-    | restore t _ k -> k t { U }
-    | return _ t -> Cons t Nil
-    end t0 m0!
+val hFn = \env0 -> \m -> {
+  handle Fn
+  | app f xs _ k -> match lookupEnv f env0
+                    | Just (Tuple xs' m) -> 
+                      (k U (hFn (growEnv xs' xs env0) m))!
+                    | Nothing -> Nil
+                    end
+  -- is this still denotational?
+  | recurse n m _ k -> (k U (hFn (ECons n { `recurse m } env0) m))!
+  | return x _ -> x
+  end U m!
 }
+
+val hS0 = \env -> \t -> \m -> hFn env (hND (hTest' t m))
+
+effect Prog -- (ei : Row) (v : *)
+| define  : Var -> List Var -> { v / ei * ei } -> { Unit / <Prog, e> * eg }
 
 val hS0' = hS0 ENil (TCons X Nil)
 
@@ -198,11 +189,15 @@ val test_negate1 = { isNil (hS0' test_negate_prog1)! }
 val test_negate_prog2 = { let _ = `negate { `fail } in A }
 val test_negate2 = { isSingleton (hS0' test_negate_prog2)! }
 
+val test_negate_prog3 = { let _ = `negate { A } in `fail }
+val test_negate3 = { isNil (hND test_negate_prog3)! }
+
 --------------------------------------------------------------------------------
 -- test
 --------------------------------------------------------------------------------
 
--- this test currently doesn't do much because there are no functions yet that modify the term 
+-- this test currently doesn't do much because there are no functions yet
+-- that modify the term 
 val test_test_prog0 = { `test { A } }
 val test_test0 = { isSingleton (hS0' test_test_prog0)! }
 
@@ -248,7 +243,13 @@ val test_chooseL3 = { isNil (hS0' test_chooseL_prog3)! }
 --------------------------------------------------------------------------------
 
 val test_app_prog0 = { `app Id (Cons {A} Nil) }
-val test_app0 = { isSingleton (hS0 (ECons Id (Cons Y Nil) { `app Y Nil } ENil) (TCons X Nil) test_app_prog0)! }
+val test_app0 = { 
+  isSingleton 
+    (hS0
+      (ECons Id (Cons Y Nil) { `app Y Nil } ENil) 
+      (TCons X Nil)
+      test_app_prog0)!
+}
 
 --------------------------------------------------------------------------------
 -- recurse
@@ -263,6 +264,7 @@ val main = {
     (test_negate0)!
     (test_negate1)!
     (test_negate2)!
+    (test_negate3)!
     (test_test0)!
     (test_choose0)!
     (test_choose1)!
